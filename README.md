@@ -93,55 +93,54 @@ python tests/test_run.py
 
 ## 💡 Usage Examples
 
-### Basic Access Control
+### Basic Zero-Knowledge Proof Demo
 
 ```python
-from rbac.access_control import AccessControlManager
-
-# Initialize access control manager
-acm = AccessControlManager()
-
-# Create roles and assign permissions
-acm.create_role("admin", ["read", "write", "delete"])
-acm.create_role("user", ["read"])
-
-# Assign roles to users
-acm.assign_role("alice", "admin")
-acm.assign_role("bob", "user")
-
-# Check permissions
-print(acm.check_permission("alice", "write"))  # True
-print(acm.check_permission("bob", "write"))   # False
-```
-
-### Zero-Knowledge Proof Generation
-
-```python
+from rbac.roles import get_role_secret
 from zkp.prover import Prover
 from zkp.verifier import Verifier
+from rbac.access_control import AccessControl
 
-prover = Prover()
-verifier = Verifier()
+# Define role to test
+role_name = "ADMIN"
 
-# Generate proof
-proof = prover.generate_proof("alice", "read", "sensitive_file.txt")
+# Get role secret
+role_secret = get_role_secret(role_name)
+if role_secret is None:
+    print("Invalid role. Access Denied.")
+else:
+    # Prover generates proof
+    prover = Prover(role_secret)
+    proof = prover.generate_proof()
+    print("Zero-knowledge proof generated")
 
-# Verify proof
-is_valid = verifier.verify_proof(proof, "sensitive_file.txt")
-print(f"Proof valid: {is_valid}")
+    # Verifier verifies proof
+    verifier = Verifier(role_secret)
+    proof_valid = verifier.verify_proof(proof)
+
+    # Access control decision
+    access_control = AccessControl()
+    access_granted = access_control.decide_access(proof_valid, role_name)
+
+    if access_granted:
+        print("Access Granted")
+    else:
+        print("Access Denied")
 ```
 
-### Integrated Access Control with ZKP
+### Role Management
 
 ```python
-# Request access with zero-knowledge proof
-result = acm.request_access_with_zkp("alice", "read", "sensitive_file.txt")
+from rbac.roles import get_role_secret
 
-if result["access_granted"]:
-    print("Access granted!")
-    print(f"ZKP Proof: {result['zkp_proof']}")
-else:
-    print(f"Access denied: {result['reason']}")
+# Get secrets for different roles
+admin_secret = get_role_secret("ADMIN")
+user_secret = get_role_secret("USER")
+manager_secret = get_role_secret("MANAGER")
+
+# Check if role exists
+if get_role_secret("INVALID_ROLE") is None:
+    print("Role does not exist")
 ```
 
 ## 🔧 Configuration
@@ -149,26 +148,23 @@ else:
 ### Default Roles
 
 The system comes with pre-configured roles:
-- **guest**: Read-only access
-- **user**: Read and write access
-- **moderator**: Read, write, and execute access
-- **admin**: Full administrative access
+- **ADMIN**: Administrative access with secret "admin_secret_123"
+- **USER**: Standard user access with secret "user_secret_456"
+- **MANAGER**: Manager access with secret "manager_secret_789"
 
 ### Cryptographic Settings
 
 Default hash algorithm: SHA-256
-Proof validity period: 5 minutes
-Session duration: 60 minutes
+Proof structure: Commitment + Nonce
+No time restrictions (simplified implementation)
 
 ## 🧪 Testing
 
-The test suite covers:
-- Cryptographic hash utilities
-- Role management and inheritance
+The simplified test suite covers:
+- Basic role secret management
 - Zero-knowledge proof generation and verification
-- Integrated access control workflows
-- Policy enforcement
-- Session management
+- Access control decision logic
+- Hash-based commitment schemes
 
 Run tests with detailed output:
 ```bash
@@ -177,44 +173,28 @@ python -m unittest tests.test_run -v
 
 ## 🔒 Security Features
 
-- **Privacy-Preserving**: Users prove access without revealing roles
-- **Replay Attack Prevention**: Time-bound proofs with nonces
-- **Cryptographic Security**: Industry-standard hash functions
-- **Session Management**: Secure session handling
-- **Access Logging**: Comprehensive audit trail
+- **Privacy-Preserving**: Users prove access without revealing role secrets
+- **Cryptographic Commitments**: SHA-256 based commitment schemes
+- **Simplified Architecture**: Reduced attack surface with minimal complexity
+- **Role-Based Secrets**: Each role has unique cryptographic secret
 
-## 📊 System Statistics
+## 📊 System Information
 
-Monitor system usage:
-```python
-stats = acm.get_system_stats()
-print(f"Total users: {stats['total_users']}")
-print(f"Total roles: {stats['total_roles']}")
-print(f"ZKPs generated: {stats['zkp_proofs_generated']}")
-```
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Run the test suite
-6. Submit a pull request
-
-## 📝 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+The simplified implementation provides:
+- **3 predefined roles**: ADMIN, USER, MANAGER
+- **Hash-based commitments**: SHA-256 cryptographic proofs
+- **Minimal dependencies**: Only essential libraries required
+- **Clean architecture**: Streamlined codebase for easier understanding
 
 ## 🔮 Future Enhancements
 
 - Integration with real ZKP libraries (libsnark, py-zkp)
+- Dynamic role creation and management
 - Database persistence for roles and policies
 - Web API interface
-- GUI administration panel
 - Advanced policy engine
 - Multi-tenancy support
-- Audit log analysis tools
+- Audit logging and monitoring tools
 
 ## 📞 Support
 
