@@ -1,44 +1,51 @@
 # main.py
 
-from rbac.roles import get_role_secret
+from rbac.roles import get_role_secret, ROLES
 from zkp.prover import Prover
 from zkp.verifier import Verifier
 from rbac.access_control import AccessControl
 
 
 def main():
-    print("=== PrivAccess: Zero-Knowledge RBAC Demo ===\n")
+    print("\n=== PrivAccess: Zero-Knowledge RBAC System ===\n")
 
-    # Change role here to test: ADMIN / USER / MANAGER / INVALID
-    role_name = "ADMIN"
-    print(f"User attempting access with role: {role_name}")
+    print("Available Roles:")
+    for role in ROLES.keys():
+        print(f" - {role}")
 
-    # Fetch role secret
+    print("\nAllowed Actions: read / write / delete\n")
+
+    user = input("Enter username: ").strip()
+    role_name = input("Enter role from above list: ").strip().upper()
+    action = input("Enter action: ").strip().lower()
+    resource = input("Enter resource name: ").strip()
+
     role_secret = get_role_secret(role_name)
-    if role_secret is None:
-        print("Invalid role. Access Denied.")
+    if not role_secret:
+        print("\n❌ Invalid role selected")
+        print("❌ Access Denied")
         return
 
-    # Prover generates proof
+    print("\n🔐 Generating Zero-Knowledge Proof...")
     prover = Prover(role_secret)
-    proof = prover.generate_proof()
-    print("\nGenerating zero-knowledge proof...")
+    proof = prover.generate_proof(user=user, action=action, resource=resource)
 
-    # Verifier verifies proof
+    print("🔍 Verifying Proof...")
     verifier = Verifier(role_secret)
-    print("Verifying proof...")
     proof_valid = verifier.verify_proof(proof)
 
-    # Access control decision
     access_control = AccessControl()
-    access_granted = access_control.decide_access(proof_valid, role_name)
+    access_granted = access_control.decide_access(proof_valid, role_name, action)
 
+    print("\n=== RESULT ===")
     if access_granted:
-        print("Proof verified successfully.")
-        print(f"Access Granted to {role_name} resources.")
+        print("✅ Proof Verified")
+        print(f"✅ Access Granted to {role_name}")
+        print(f"➡ Action: {action}")
+        print(f"➡ Resource: {resource}")
     else:
-        print("Proof verification failed.")
-        print("Access Denied.")
+        print("❌ Access Denied")
+        print(f"🚫 {role_name} is not allowed to perform '{action}'")
 
 
 if __name__ == "__main__":

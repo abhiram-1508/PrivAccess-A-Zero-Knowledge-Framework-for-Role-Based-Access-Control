@@ -1,13 +1,15 @@
 # rbac/access_control.py
 
-class AccessControl:
-    def __init__(self):
-        pass
+from rbac.roles import get_role_permissions
 
-    def decide_access(self, proof_valid: bool, role_name: str) -> bool:
+
+class AccessControl:
+    def decide_access(self, proof_valid: bool, role_name: str, action: str) -> bool:
         """
-        Decides access based on proof verification result.
+        Decide access based on proof validity and role permissions
         """
-        if proof_valid:
-            return True
-        return False
+        if not proof_valid:
+            return False
+
+        allowed_actions = get_role_permissions(role_name)
+        return action in allowed_actions
