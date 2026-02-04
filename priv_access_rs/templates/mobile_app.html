@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PrivAccess Mobile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- ZKP Logic (legacy, can remove if not needed) -->
+    <!-- <script src="/static/js/zkp.js"></script> -->
+    <!-- Geohash ZKP dependencies -->
+    <!-- Use CDN for snarkjs if local file is missing -->
+    <script src="https://cdn.jsdelivr.net/npm/snarkjs@0.7.4/build/snarkjs.min.js"></script>
+    <script src="/static/js/geohash_zkp.js?v=2"></script>
+    <!-- Axios -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+
+        .cyber-font {
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .scan-line {
+            width: 100%;
+            height: 2px;
+            background: #00ff00;
+            position: absolute;
+            animation: scan 2s infinite linear;
+            box-shadow: 0 0 4px #00ff00;
+        }
+
+        @keyframes scan {
+            0% {
+                top: 0%;
+            }
+
+            100% {
+                top: 100%;
+            }
+        }
+
+        .success-pulse {
+            animation: pulse-green 1s infinite;
+        }
+
+        @keyframes pulse-green {
+            0% {
+                box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.7);
+            }
+
+            70% {
+                box-shadow: 0 0 0 20px rgba(0, 255, 0, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(0, 255, 0, 0);
+            }
+        }
+    </style>
+</head>
+
+<body class="h-screen flex flex-col">
+
+    <!-- Header -->
+    <div class="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
+        <h1 class="text-xl font-bold cyber-font text-blue-400">Mobile Key Access</h1>
+        <div id="connection-status" class="w-3 h-3 rounded-full bg-red-500"></div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col items-center justify-center p-6 relative">
+
+        <!-- Unified View -->
+        <div id="unified-view" class="text-center w-full max-w-md">
+            <!-- Door Context -->
+            <div class="mb-6">
+                <h2 class="text-3xl font-bold cyber-font text-white mb-1">
+                    {{ door_id | default(value="UNKNOWN DOOR") }}
+                </h2>
+                <p class="text-blue-400 text-sm tracking-widest uppercase">Secured Access Point</p>
+            </div>
+
+            <!-- Status Indicator -->
+            <div id="status-card" class="mb-8 p-6 bg-gray-900 rounded-2xl border border-gray-800 shadow-xl">
+                <div id="loc-status" class="flex items-center justify-center mb-4">
+                    <div class="w-3 h-3 rounded-full bg-yellow-500 mr-2 animate-pulse"></div>
+                    <span class="text-gray-400 text-sm">Detecting Location...</span>
+                </div>
+                <div id="geohash-display" class="font-mono text-xl text-gray-500">------</div>
+            </div>
+
+            <!-- Identity Selection (Shown if not set) -->
+            <div id="identity-section" class="hidden mb-8">
+                <label class="block text-gray-400 text-xs font-bold mb-3 tracking-widest uppercase">Select Access
+                    Role</label>
+                <div class="grid grid-cols-3 gap-3">
+                    <button onclick="selectRole('STUDENT')"
+                        class="role-btn p-3 rounded-xl border border-gray-800 bg-gray-950 text-xs font-bold hover:border-blue-500 transition">STUDENT</button>
+                    <button onclick="selectRole('FACULTY')"
+                        class="role-btn p-3 rounded-xl border border-gray-800 bg-gray-950 text-xs font-bold hover:border-blue-500 transition">FACULTY</button>
+                    <button onclick="selectRole('ADMIN')"
+                        class="role-btn p-3 rounded-xl border border-gray-800 bg-gray-950 text-xs font-bold hover:border-blue-500 transition">ADMIN</button>
+                </div>
+                <input type="hidden" id="selected-role" value="">
+            </div>
+
+            <!-- Identity Display (Shown if set) -->
+            <div id="identity-display" class="hidden mb-8 p-4 bg-blue-900/20 border border-blue-500/30 rounded-xl">
+                <span class="text-blue-400 text-xs uppercase tracking-widest font-bold">Authorized As</span>
+                <p id="active-role" class="text-xl font-bold text-white">------</p>
+                <button onclick="resetIdentity()"
+                    class="text-[10px] text-gray-500 mt-2 hover:text-red-400 underline uppercase tracking-tighter">Change
+                    Identity</button>
+            </div>
+
+            <!-- Action Button -->
+            <button id="unlock-btn" onclick="requestUnlock()" disabled
+                class="w-full bg-gray-800 text-gray-500 font-bold py-5 px-6 rounded-2xl shadow-lg transition-all flex items-center justify-center disabled:cursor-not-allowed">
+                <span id="btn-text">INITIALIZING...</span>
+            </button>
+        </div>
+
+        <!-- Processing Modal (Overlay) -->
+        <div id="processing-overlay"
+            class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex-col items-center justify-center z-50 p-8">
+            <div class="w-20 h-20 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-6"></div>
+            <h3 class="text-2xl font-bold cyber-font text-blue-400 mb-2">COMPUTING PROOF</h3>
+            <p id="progress-step" class="text-gray-500 font-mono text-sm">Generating Zero-Knowledge structures...</p>
+        </div>
+
+        <!-- Result Views (Popups) -->
+        <div id="success-popup" class="fixed inset-0 bg-black flex flex-col items-center justify-center z-[60] hidden">
+            <div class="w-32 h-32 bg-green-500 rounded-full flex items-center justify-center success-pulse mb-8">
+                <svg class="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <h2 class="text-4xl font-bold cyber-font mb-2 text-white">GRANTED</h2>
+            <p class="text-green-400 font-mono tracking-widest">DOOR UNLOCKED</p>
+            <button onclick="location.reload()" class="mt-12 text-gray-500 underline">Close Window</button>
+        </div>
+
+        <div id="error-popup"
+            class="fixed inset-0 bg-black flex flex-col items-center justify-center z-[60] hidden p-6">
+            <div class="w-24 h-24 bg-red-600 rounded-full flex items-center justify-center mb-8">
+                <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M6 18L18 6M6 6l12 12">
+                    </path>
+                </svg>
+            </div>
+            <h2 class="text-3xl font-bold cyber-font mb-2 text-red-500 text-center uppercase">Access Denied</h2>
+            <p id="error-detail" class="text-gray-400 font-mono text-sm text-center">Identity verification failed</p>
+            <button onclick="location.reload()"
+                class="mt-12 bg-gray-800 px-8 py-3 rounded-full text-white font-bold">Try Again</button>
+        </div>
+
+    </div>
+
+    <!-- Script dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/ngeohash@0.6.3/build/ngeohash.min.js"></script>
+    <script src="/static/js/zkp.js?v=3"></script>
+
+    <script>
+        const STORE_KEY = "zk_identity";
+        let currentGeohash = "";
+        let currentDoor = "{{ door_id }}";
+
+        // Initialization
+        window.onload = () => {
+            initLocation();
+            checkIdentity();
+        };
+
+        function initLocation() {
+            const locStatus = document.getElementById('loc-status');
+            const geohashDisplay = document.getElementById('geohash-display');
+
+            if (!navigator.geolocation) {
+                updateLocStatus("Not Supported", "bg-red-500");
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const lat = pos.coords.latitude;
+                    const lon = pos.coords.longitude;
+                    currentGeohash = ngeohash.encode(lat, lon, 10);
+                    geohashDisplay.innerText = currentGeohash.substring(0, 6) + " " + currentGeohash.substring(6);
+                    geohashDisplay.classList.replace('text-gray-500', 'text-blue-400');
+                    updateLocStatus("Proximity Active", "bg-green-500");
+
+                    // Notify Door Display that location is confirmed
+                    axios.post('/api/notify_status', {
+                        door_id: currentDoor,
+                        status: "verified"
+                    });
+
+                    enableUnlockIfReady();
+                },
+                (err) => {
+                    updateLocStatus("Location Restricted", "bg-red-500");
+                    geohashDisplay.innerText = "BLOCKED BY HTTP";
+
+                    // Add a button to simulate location if blocked (common on HTTP/LAN)
+                    const statusCard = document.getElementById('status-card');
+                    if (!document.getElementById('sim-loc-btn')) {
+                        const simBtn = document.createElement('button');
+                        simBtn.id = 'sim-loc-btn';
+                        simBtn.className = "mt-4 w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all animate-pulse";
+                        simBtn.innerText = "CLICK HERE TO SIMULATE LOCATION";
+                        simBtn.onclick = () => {
+                            currentGeohash = "t1q7hk9v"; // Matches Lab A prefix
+                            geohashDisplay.innerText = currentGeohash.substring(0, 6) + " " + currentGeohash.substring(6);
+                            geohashDisplay.classList.replace('text-gray-500', 'text-blue-400');
+                            updateLocStatus("Demo Location Active", "bg-blue-500");
+
+                            // Immediately notify the door display
+                            axios.post('/api/notify_status', {
+                                door_id: currentDoor,
+                                status: "verified"
+                            }).catch(e => console.error("Notify failed:", e));
+
+                            enableUnlockIfReady();
+                            simBtn.remove();
+                        };
+                        statusCard.appendChild(simBtn);
+                    }
+                    console.error("Location error:", err);
+                },
+                { enableHighAccuracy: true }
+            );
+        }
+
+        function updateLocStatus(text, color) {
+            const indicator = document.querySelector('#loc-status div');
+            const statusText = document.querySelector('#loc-status span');
+            if (indicator && statusText) {
+                indicator.className = `w-3 h-3 rounded-full mr-2 ${color}`;
+                indicator.classList.remove('animate-pulse');
+                statusText.innerText = text;
+            }
+        }
+
+        function checkIdentity() {
+            const stored = localStorage.getItem(STORE_KEY);
+            if (stored) {
+                const identity = JSON.parse(stored);
+                document.getElementById('identity-section').classList.add('hidden');
+                document.getElementById('identity-display').classList.remove('hidden');
+                document.getElementById('active-role').innerText = identity.role;
+                enableUnlockIfReady();
+            } else {
+                document.getElementById('identity-section').classList.remove('hidden');
+                document.getElementById('identity-display').classList.add('hidden');
+            }
+        }
+
+        function selectRole(role) {
+            // Update UI
+            document.querySelectorAll('.role-btn').forEach(b => {
+                b.classList.remove('border-blue-500', 'bg-blue-900/20');
+            });
+            event.target.classList.add('border-blue-500', 'bg-blue-900/20');
+
+            // Generate secret (simulated registration)
+            axios.get('/mobile/setup?role=' + role).then(res => {
+                localStorage.setItem(STORE_KEY, JSON.stringify(res.data));
+                checkIdentity();
+            });
+        }
+
+        function resetIdentity() {
+            localStorage.removeItem(STORE_KEY);
+            location.reload();
+        }
+
+        function enableUnlockIfReady() {
+            const btn = document.getElementById('unlock-btn');
+            const stored = localStorage.getItem(STORE_KEY);
+            if (currentGeohash && stored && currentDoor) {
+                btn.disabled = false;
+                btn.classList.replace('bg-gray-800', 'bg-blue-600');
+                btn.classList.replace('text-gray-500', 'text-white');
+                document.getElementById('btn-text').innerText = "REQUEST ACCESS";
+            }
+        }
+
+        async function requestUnlock() {
+            const overlay = document.getElementById('processing-overlay');
+            const progress = document.getElementById('progress-step');
+            overlay.classList.remove('hidden');
+
+            try {
+                const identity = JSON.parse(localStorage.getItem(STORE_KEY));
+                const prover = new SchnorrProverJS(identity.secret);
+
+                progress.innerText = "Hashing local parameters...";
+                await new Promise(r => setTimeout(r, 400));
+
+                progress.innerText = "Constructing Zero-Knowledge Proof...";
+                // We pass currentGeohash to bind it to the proof
+                const proof = await prover.generateProof(currentGeohash);
+
+                progress.innerText = "Transmitting Proof to Verifier...";
+                const payload = {
+                    door_id: currentDoor,
+                    proof: proof,
+                    geohash: currentGeohash
+                };
+
+                const res = await axios.post('/api/verify', payload);
+
+                overlay.classList.add('hidden');
+                if (res.data.status === 'success') {
+                    document.getElementById('success-popup').classList.remove('hidden');
+                } else {
+                    showError(res.data.message);
+                }
+
+            } catch (e) {
+                overlay.classList.add('hidden');
+                showError(e.response?.data?.message || e.message);
+            }
+        }
+
+        function showError(msg) {
+            document.getElementById('error-detail').innerText = msg;
+            document.getElementById('error-popup').classList.remove('hidden');
+        }
+    </script>
+</body>
+
+</html>
