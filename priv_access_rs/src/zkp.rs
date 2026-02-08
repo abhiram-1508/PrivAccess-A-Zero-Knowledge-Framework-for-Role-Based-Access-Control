@@ -34,10 +34,11 @@ impl SchnorrVerifier {
         };
 
         // 1. Recompute Challenge c = Hash(R, Y, geohash)
-        let geohash_prefix = if proof.geohash.len() >= 6 { &proof.geohash[0..6] } else { &proof.geohash };
+        let geohash_prefix = if proof.geohash.len() >= 9 { &proof.geohash[0..9] } else { &proof.geohash };
         println!("TERMINAL: [ZKP] Verifying Identity for geofence: {}", geohash_prefix);
         
         let challenge_input = format!("{}{}{}", r_comm, y, geohash_prefix);
+        println!("TERMINAL: [ZKP] Challenge Input (Rust): {}", challenge_input);
         let mut hasher = Sha256::new();
         hasher.update(challenge_input.as_bytes());
         let result = hasher.finalize();
@@ -61,11 +62,13 @@ impl SchnorrVerifier {
     }
 }
 
+#[allow(dead_code)]
 pub struct SchnorrProver {
     private_key: BigUint,
     public_key: BigUint,
 }
 
+#[allow(dead_code)]
 impl SchnorrProver {
     pub fn new(private_key: BigUint) -> Self {
         let public_key = power_mod(&G, &private_key, &P);
@@ -90,7 +93,7 @@ impl SchnorrProver {
         let r_comm = power_mod(&G, &r, &P);
 
         // 3. Challenge c = Hash(R, Public Key, geohash_prefix)
-        let geohash_prefix = if geohash.len() >= 6 { &geohash[0..6] } else { &geohash };
+        let geohash_prefix = if geohash.len() >= 9 { &geohash[0..9] } else { &geohash };
         let challenge_input = format!("{}{}{}", r_comm, self.public_key, geohash_prefix);
         let mut hasher = Sha256::new();
         hasher.update(challenge_input.as_bytes());

@@ -6,337 +6,666 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>PrivAccess Mobile</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- ZKP Logic (legacy, can remove if not needed) -->
-    <!-- <script src="/static/js/zkp.js"></script> -->
-    <!-- Geohash ZKP dependencies -->
-    <!-- Use CDN for snarkjs if local file is missing -->
-    <script src="https://cdn.jsdelivr.net/npm/snarkjs@0.7.4/build/snarkjs.min.js"></script>
-    <script src="/static/js/geohash_zkp.js?v=2"></script>
-    <!-- Axios -->
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <!-- Google Fonts -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
 
     <style>
         body {
             background-color: #000;
             color: #fff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            overflow: hidden;
+            font-family: 'Segoe UI', sans-serif;
+            overflow-x: hidden;
         }
 
         .cyber-font {
             font-family: 'Orbitron', sans-serif;
         }
 
-        .scan-line {
+        .glass {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-blue {
             width: 100%;
-            height: 2px;
-            background: #00ff00;
-            position: absolute;
-            animation: scan 2s infinite linear;
-            box-shadow: 0 0 4px #00ff00;
+            background: #2563eb;
+            color: white;
+            font-weight: bold;
+            padding: 1rem;
+            border-radius: 1rem;
+            transition: all 0.2s;
         }
 
-        @keyframes scan {
-            0% {
-                top: 0%;
-            }
-
-            100% {
-                top: 100%;
-            }
+        .btn-blue:hover {
+            background: #3b82f6;
         }
 
-        .success-pulse {
-            animation: pulse-green 1s infinite;
+        .input-dark {
+            width: 100%;
+            background: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            color: white;
         }
 
-        @keyframes pulse-green {
-            0% {
-                box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.7);
-            }
+        #reader {
+            width: 100% !important;
+            border: none !important;
+            border-radius: 1rem;
+            overflow: hidden;
+        }
 
-            70% {
-                box-shadow: 0 0 0 20px rgba(0, 255, 0, 0);
-            }
+        #reader__dashboard {
+            background: transparent !important;
+        }
 
-            100% {
-                box-shadow: 0 0 0 0 rgba(0, 255, 0, 0);
-            }
+        #reader__status_span {
+            display: none;
+        }
+
+        #reader video {
+            border-radius: 1rem;
         }
     </style>
 </head>
 
-<body class="h-screen flex flex-col">
+<body class="min-h-screen flex flex-col">
 
     <!-- Header -->
-    <div class="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
-        <h1 class="text-xl font-bold cyber-font text-blue-400">Mobile Key Access</h1>
-        <div id="connection-status" class="w-3 h-3 rounded-full bg-red-500"></div>
+    <header
+        class="p-6 border-b border-gray-900 flex justify-between items-center bg-black/50 sticky top-0 z-40 backdrop-blur-md">
+        <div class="flex items-center space-x-4">
+            <img src="/static/img/logo.jpg" alt="Logo" class="w-10 h-10 rounded-xl border border-blue-500/30">
+            <div>
+                <h1 class="text-xl font-bold cyber-font text-blue-400">PRIVACCESS</h1>
+                <p id="role-label" class="text-[10px] text-gray-500 uppercase tracking-widest mt-1">Authenticating...
+                </p>
+            </div>
+        </div>
+        <div id="loc-indicator" class="w-3 h-3 rounded-full bg-red-500"></div>
+    </header>
+
+    <main class="flex-1 p-6 flex flex-col">
+
+        <!-- Login Form -->
+        <section id="login-view" class="hidden space-y-6">
+            <div class="text-center mb-8">
+                <h2 id="login-title" class="text-2xl font-bold cyber-font mb-2">INITIALIZATION</h2>
+                <p id="login-desc" class="text-gray-500 text-sm">Validating credentials for session initiation.</p>
+            </div>
+
+            <div class="space-y-4">
+                <div id="password-field" class="hidden">
+                    <input type="password" id="admin-pass" class="input-dark" placeholder="Admin Password">
+                </div>
+                <div id="faculty-fields" class="hidden space-y-4">
+                    <input type="text" id="faculty-name" class="input-dark" placeholder="Faculty Name (e.g. Abhi)">
+                    <input type="text" id="faculty-id" class="input-dark" placeholder="Faculty ID (e.g. Fac1)">
+                </div>
+                <div id="pin-field" class="hidden">
+                    <input type="number" id="faculty-pin" class="input-dark" placeholder="Security PIN">
+                </div>
+                <div id="section-field" class="hidden">
+                    <select id="user-section" class="input-dark">
+                        <option value="" disabled selected>Select Section (A-H)</option>
+                        <option value="A">Section A</option>
+                        <option value="B">Section B</option>
+                        <option value="C">Section C</option>
+                        <option value="D">Section D</option>
+                        <option value="E">Section E</option>
+                        <option value="F">Section F</option>
+                        <option value="G">Section G</option>
+                        <option value="H">Section H</option>
+                    </select>
+                </div>
+                <button onclick="handleLogin()" class="btn-blue">INITIALIZE SESSION</button>
+            </div>
+        </section>
+
+        <!-- Admin View -->
+        <section id="admin-view" class="hidden space-y-8">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-bold cyber-font text-red-500">CENTRAL CONTROL</h2>
+                <div class="flex space-x-2">
+                    <button onclick="fetchHistory()"
+                        class="bg-gray-800 text-gray-400 px-3 py-1 rounded text-[10px] border border-gray-700 uppercase">History</button>
+                    <button onclick="showView('login-view')"
+                        class="bg-gray-800 text-gray-400 px-3 py-1 rounded text-[10px] border border-gray-700 uppercase">Logout</button>
+                </div>
+            </div>
+
+            <!-- Admin Reference Data -->
+            <div class="grid grid-cols-2 gap-4">
+                <div class="glass p-4 rounded-2xl border border-blue-500/10">
+                    <h3 class="text-[10px] text-blue-400 uppercase font-bold mb-2 tracking-widest">Faculty Directory
+                    </h3>
+                    <div class="space-y-1 text-[9px]">
+                        {% for fac in faculties %}
+                        <div class="flex justify-between border-b border-gray-800/50 pb-1">
+                            <span class="text-gray-300">{{ fac.name }}</span>
+                            <span class="text-gray-500 font-mono">{{ fac.id }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="glass p-4 rounded-2xl border border-blue-500/10">
+                    <h3 class="text-[10px] text-blue-400 uppercase font-bold mb-2 tracking-widest">Sections</h3>
+                    <div class="flex flex-wrap gap-1">
+                        {% for sec in sections %}
+                        <span
+                            class="bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20 text-[9px]">{{
+                            sec }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div id="admin-qr-container" class="space-y-4">
+                <p class="text-[10px] text-blue-400 uppercase text-center tracking-[0.3em] font-bold">Remote Access
+                    Control</p>
+                <div id="admin-qr-list" class="grid grid-cols-1 gap-4"></div>
+            </div>
+        </section>
+
+        <!-- Scanner View (Faculty/Student) -->
+        <section id="scanner-view" class="hidden space-y-6">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-bold cyber-font text-blue-400">SCAN TO UNLOCK</h2>
+                <button onclick="toggleQRDisplay()" id="qr-toggle-btn"
+                    class="text-[10px] bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full border border-blue-500/30 uppercase">Open
+                    Physical Scanner</button>
+            </div>
+
+            <p class="text-gray-500 text-sm text-center">Scan a classroom code to request access.</p>
+
+            <!-- Room Security Codes Display (Primary focus) -->
+            <div id="simulation-qrs" class="space-y-4 pt-4">
+                <p class="text-[10px] text-blue-400 uppercase text-center tracking-[0.3em] font-bold">Room Access Codes
+                </p>
+                <div id="sim-qr-list" class="grid grid-cols-1 gap-4"></div>
+            </div>
+
+            <!-- Camera Reader (Secondary focus) -->
+            <div id="reader-container" class="hidden border-t border-gray-900 pt-6">
+                <p class="text-[10px] text-gray-500 uppercase text-center tracking-widest mb-4">Physical Scanner</p>
+                <div id="reader" class="glass overflow-hidden rounded-2xl"></div>
+            </div>
+
+            <div class="p-4 glass rounded-xl text-center">
+                <p class="text-xs text-gray-500 uppercase tracking-widest mb-1">Status</p>
+                <p id="scanner-status" class="text-yellow-500 font-bold">READY TO SCAN</p>
+            </div>
+        </section>
+
+        <!-- Logs View -->
+        <section id="logs-view" class="hidden space-y-6">
+            <div class="flex justify-between items-center">
+                <h2 class="text-xl font-bold cyber-font">ACCESS HISTORY</h2>
+                <button onclick="showView('admin-view')" class="text-xs text-gray-500">Back</button>
+            </div>
+            <div id="logs-list" class="space-y-3"></div>
+        </section>
+
+    </main>
+
+    <!-- Overlays -->
+    <div id="proc-overlay" class="fixed inset-0 bg-black/95 z-50 hidden flex-col items-center justify-center">
+        <div class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p id="proc-msg" class="text-blue-500 cyber-font text-sm uppercase">Verifying Location...</p>
     </div>
 
-    <!-- Main Content -->
-    <div class="flex-1 flex flex-col items-center justify-center p-6 relative">
+    <!-- Modals -->
+    <div id="success-modal"
+        class="fixed inset-0 bg-black z-50 hidden flex-col items-center justify-center p-8 text-center">
+        <div class="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mb-6">
+            <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M5 13l4 4L19 7"></path>
+            </svg>
+        </div>
+        <h2 class="text-2xl font-bold cyber-font mb-2">ACCESS GRANTED</h2>
+        <p id="success-msg" class="text-gray-400 mb-8"></p>
+        <button id="success-btn" onclick="location.reload()" class="btn-blue">CONTINUE</button>
+    </div>
 
-        <!-- Unified View -->
-        <div id="unified-view" class="text-center w-full max-w-md">
-            <!-- Door Context -->
-            <div class="mb-6">
-                <h2 class="text-3xl font-bold cyber-font text-white mb-1">
-                    {{ door_id | default(value="UNKNOWN DOOR") }}
-                </h2>
-                <p class="text-blue-400 text-sm tracking-widest uppercase">Secured Access Point</p>
-            </div>
-
-            <!-- Status Indicator -->
-            <div id="status-card" class="mb-8 p-6 bg-gray-900 rounded-2xl border border-gray-800 shadow-xl">
-                <div id="loc-status" class="flex items-center justify-center mb-4">
-                    <div class="w-3 h-3 rounded-full bg-yellow-500 mr-2 animate-pulse"></div>
-                    <span class="text-gray-400 text-sm">Detecting Location...</span>
-                </div>
-                <div id="geohash-display" class="font-mono text-xl text-gray-500">------</div>
-            </div>
-
-            <!-- Identity Selection (Shown if not set) -->
-            <div id="identity-section" class="hidden mb-8">
-                <label class="block text-gray-400 text-xs font-bold mb-3 tracking-widest uppercase">Select Access
-                    Role</label>
-                <div class="grid grid-cols-3 gap-3">
-                    <button onclick="selectRole('STUDENT')"
-                        class="role-btn p-3 rounded-xl border border-gray-800 bg-gray-950 text-xs font-bold hover:border-blue-500 transition">STUDENT</button>
-                    <button onclick="selectRole('FACULTY')"
-                        class="role-btn p-3 rounded-xl border border-gray-800 bg-gray-950 text-xs font-bold hover:border-blue-500 transition">FACULTY</button>
-                    <button onclick="selectRole('ADMIN')"
-                        class="role-btn p-3 rounded-xl border border-gray-800 bg-gray-950 text-xs font-bold hover:border-blue-500 transition">ADMIN</button>
-                </div>
-                <input type="hidden" id="selected-role" value="">
-            </div>
-
-            <!-- Identity Display (Shown if set) -->
-            <div id="identity-display" class="hidden mb-8 p-4 bg-blue-900/20 border border-blue-500/30 rounded-xl">
-                <span class="text-blue-400 text-xs uppercase tracking-widest font-bold">Authorized As</span>
-                <p id="active-role" class="text-xl font-bold text-white">------</p>
-                <button onclick="resetIdentity()"
-                    class="text-[10px] text-gray-500 mt-2 hover:text-red-400 underline uppercase tracking-tighter">Change
-                    Identity</button>
-            </div>
-
-            <!-- Action Button -->
-            <button id="unlock-btn" onclick="requestUnlock()" disabled
-                class="w-full bg-gray-800 text-gray-500 font-bold py-5 px-6 rounded-2xl shadow-lg transition-all flex items-center justify-center disabled:cursor-not-allowed">
-                <span id="btn-text">INITIALIZING...</span>
+    <div id="error-modal"
+        class="fixed inset-0 bg-black z-50 hidden flex-col items-center justify-center p-8 text-center">
+        <div class="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center mb-6">
+            <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </div>
+        <h2 class="text-2xl font-bold cyber-font mb-2 text-red-500">VERIFICATION FAILED</h2>
+        <p id="error-msg" class="text-gray-400 mb-8"></p>
+        <div class="space-y-4 w-full">
+            <button onclick="simulateLocation()"
+                class="w-full bg-blue-600 hover:bg-blue-500 text-white p-5 rounded-2xl border-2 border-blue-400 font-bold cyber-font text-sm uppercase shadow-[0_0_20px_rgba(37,99,235,0.4)] animate-pulse">
+                Use Simulated Location (Demo)
             </button>
+            <button onclick="hideError()" class="text-gray-500 text-xs font-bold uppercase tracking-widest">Skip / Try
+                Again</button>
         </div>
-
-        <!-- Processing Modal (Overlay) -->
-        <div id="processing-overlay"
-            class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex-col items-center justify-center z-50 p-8">
-            <div class="w-20 h-20 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-6"></div>
-            <h3 class="text-2xl font-bold cyber-font text-blue-400 mb-2">COMPUTING PROOF</h3>
-            <p id="progress-step" class="text-gray-500 font-mono text-sm">Generating Zero-Knowledge structures...</p>
-        </div>
-
-        <!-- Result Views (Popups) -->
-        <div id="success-popup" class="fixed inset-0 bg-black flex flex-col items-center justify-center z-[60] hidden">
-            <div class="w-32 h-32 bg-green-500 rounded-full flex items-center justify-center success-pulse mb-8">
-                <svg class="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M5 13l4 4L19 7"></path>
-                </svg>
-            </div>
-            <h2 class="text-4xl font-bold cyber-font mb-2 text-white">GRANTED</h2>
-            <p class="text-green-400 font-mono tracking-widest">DOOR UNLOCKED</p>
-            <button onclick="location.reload()" class="mt-12 text-gray-500 underline">Close Window</button>
-        </div>
-
-        <div id="error-popup"
-            class="fixed inset-0 bg-black flex flex-col items-center justify-center z-[60] hidden p-6">
-            <div class="w-24 h-24 bg-red-600 rounded-full flex items-center justify-center mb-8">
-                <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M6 18L18 6M6 6l12 12">
-                    </path>
-                </svg>
-            </div>
-            <h2 class="text-3xl font-bold cyber-font mb-2 text-red-500 text-center uppercase">Access Denied</h2>
-            <p id="error-detail" class="text-gray-400 font-mono text-sm text-center">Identity verification failed</p>
-            <button onclick="location.reload()"
-                class="mt-12 bg-gray-800 px-8 py-3 rounded-full text-white font-bold">Try Again</button>
-        </div>
-
     </div>
 
-    <!-- Script dependencies -->
     <script src="https://cdn.jsdelivr.net/npm/ngeohash@0.6.3/build/ngeohash.min.js"></script>
-    <script src="/static/js/zkp.js?v=3"></script>
-
+    <script src="/static/js/zkp.js"></script>
     <script>
-        const STORE_KEY = "zk_identity";
+        const ROLES = { STUDENT: 'STUDENT', FACULTY: 'FACULTY', ADMIN: 'ADMIN' };
+        let currentRole = new URLSearchParams(window.location.search).get('role') || 'STUDENT';
         let currentGeohash = "";
-        let currentDoor = "{{ door_id }}";
+        let identity = null;
+        let html5QrScanner = null;
+        let watchId = null;
+        let isSimulated = false;
+        let isAutomatedScan = false;
 
-        // Initialization
         window.onload = () => {
-            initLocation();
-            checkIdentity();
+            const params = new URLSearchParams(window.location.search);
+            const doorIdFromUrl = params.get('door');
+
+            document.getElementById('role-label').innerText = currentRole;
+
+            if (doorIdFromUrl) {
+                // MOBILE MODE: Zero-touch logic
+                autoUnlockFlow(doorIdFromUrl, params);
+            } else {
+                // PC/GATEWAY MODE: Normal login view
+                initView();
+                if (currentRole !== ROLES.ADMIN) {
+                    initAutoLocation();
+                }
+            }
         };
 
-        function initLocation() {
-            const locStatus = document.getElementById('loc-status');
-            const geohashDisplay = document.getElementById('geohash-display');
+        async function autoUnlockFlow(doorId, params) {
+            isAutomatedScan = true;
+            // 1. Extract identity from URL
+            identity = {
+                role: params.get('role').toUpperCase(),
+                section: params.get('section'),
+                faculty_name: params.get('faculty_name'),
+                faculty_id: params.get('faculty_id'),
+                pin: params.get('pin')
+            };
 
+            // 2. Clear UI, show process
+            showProc(true, "Verifying Scan...");
+            document.getElementById('login-view').classList.add('hidden');
+
+            // 3. Initialize Location (auto-simulates if blocked)
+            initAutoLocation();
+
+            // 4. Setup secret
+            try {
+                const res = await axios.get(`/mobile/setup?role=${identity.role}`);
+                identity.secret = res.data.secret;
+
+                // 5. Short wait for location then trigger logic
+                let attempts = 0;
+                const checkLoc = setInterval(() => {
+                    attempts++;
+                    if (currentGeohash || attempts > 10) {
+                        clearInterval(checkLoc);
+                        triggerUnlock(doorId);
+                    }
+                }, 500);
+            } catch (e) {
+                showError("Zero-Touch Setup Failed: " + e.message);
+            }
+        }
+
+        function initView() {
+            showView('login-view');
+            if (currentRole === ROLES.ADMIN) {
+                document.getElementById('password-field').classList.remove('hidden');
+                document.getElementById('login-title').innerText = "ADMIN LOGIN";
+                document.getElementById('login-desc').innerText = "Enter password for central access control.";
+            } else if (currentRole === ROLES.FACULTY) {
+                document.getElementById('faculty-fields').classList.remove('hidden');
+                document.getElementById('pin-field').classList.remove('hidden');
+                document.getElementById('section-field').classList.remove('hidden');
+                document.getElementById('login-title').innerText = "FACULTY AUTH";
+                document.getElementById('login-desc').innerText = "Enter Name, ID, PIN and select section.";
+            } else {
+                document.getElementById('section-field').classList.remove('hidden');
+                document.getElementById('login-title').innerText = "STUDENT ACCESS";
+                document.getElementById('login-desc').innerText = "Select your section and ensure GPS is active.";
+            }
+        }
+
+        function initAutoLocation() {
             if (!navigator.geolocation) {
-                updateLocStatus("Not Supported", "bg-red-500");
+                showError("Geolocation is not supported by this browser.");
                 return;
             }
 
-            navigator.geolocation.getCurrentPosition(
+            // High accuracy is required for 5m proximity
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            };
+
+            watchId = navigator.geolocation.watchPosition(
                 (pos) => {
-                    const lat = pos.coords.latitude;
-                    const lon = pos.coords.longitude;
-                    currentGeohash = ngeohash.encode(lat, lon, 10);
-                    geohashDisplay.innerText = currentGeohash.substring(0, 6) + " " + currentGeohash.substring(6);
-                    geohashDisplay.classList.replace('text-gray-500', 'text-blue-400');
-                    updateLocStatus("Proximity Active", "bg-green-500");
-
-                    // Notify Door Display that location is confirmed
-                    axios.post('/api/notify_status', {
-                        door_id: currentDoor,
-                        status: "verified"
-                    });
-
-                    enableUnlockIfReady();
+                    if (isSimulated) return;
+                    // Encode to 10 chars, but we only use 9 for 5m check
+                    currentGeohash = ngeohash.encode(pos.coords.latitude, pos.coords.longitude, 10);
+                    document.getElementById('loc-indicator').classList.replace('bg-red-500', 'bg-green-500');
+                    document.getElementById('loc-indicator').classList.add('animate-pulse');
+                    console.log("GPS Lock:", currentGeohash);
                 },
                 (err) => {
-                    updateLocStatus("Location Restricted", "bg-red-500");
-                    geohashDisplay.innerText = "BLOCKED BY HTTP";
+                    if (isSimulated) return;
+                    console.warn("GPS ERROR:", err);
+                    document.getElementById('loc-indicator').classList.replace('bg-green-500', 'bg-red-500');
 
-                    // Add a button to simulate location if blocked (common on HTTP/LAN)
-                    const statusCard = document.getElementById('status-card');
-                    if (!document.getElementById('sim-loc-btn')) {
-                        const simBtn = document.createElement('button');
-                        simBtn.id = 'sim-loc-btn';
-                        simBtn.className = "mt-4 w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all animate-pulse";
-                        simBtn.innerText = "CLICK HERE TO SIMULATE LOCATION";
-                        simBtn.onclick = () => {
-                            currentGeohash = "t1q7hk9v"; // Matches Lab A prefix
-                            geohashDisplay.innerText = currentGeohash.substring(0, 6) + " " + currentGeohash.substring(6);
-                            geohashDisplay.classList.replace('text-gray-500', 'text-blue-400');
-                            updateLocStatus("Demo Location Active", "bg-blue-500");
-
-                            // Immediately notify the door display
-                            axios.post('/api/notify_status', {
-                                door_id: currentDoor,
-                                status: "verified"
-                            }).catch(e => console.error("Notify failed:", e));
-
-                            enableUnlockIfReady();
-                            simBtn.remove();
-                        };
-                        statusCard.appendChild(simBtn);
+                    if (err.code === 1) {
+                        // AUTO-SIMULATION FOR DEMO: If blocked, just use simulated location automatically
+                        console.log("GPS Blocked - Auto-Simulating for Demo Flow");
+                        simulateLocation();
+                        return;
                     }
-                    console.error("Location error:", err);
+
+                    let msg = "GPS Error. Please ensure location is enabled.";
+                    showError(msg);
                 },
-                { enableHighAccuracy: true }
+                options
             );
+
+            // Add Simulation button for testing (Prominent for Demo)
+            const header = document.querySelector('header');
+            const simBtn = document.createElement('button');
+            simBtn.id = "header-sim-btn";
+            simBtn.className = "text-[10px] bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)] text-white px-3 py-1.5 rounded-full ml-2 border border-blue-400 font-bold cyber-font uppercase animate-pulse";
+            simBtn.innerText = "SIMULATE AT DOOR";
+            simBtn.onclick = simulateLocation;
+            header.appendChild(simBtn);
         }
 
-        function updateLocStatus(text, color) {
-            const indicator = document.querySelector('#loc-status div');
-            const statusText = document.querySelector('#loc-status span');
-            if (indicator && statusText) {
-                indicator.className = `w-3 h-3 rounded-full mr-2 ${color}`;
-                indicator.classList.remove('animate-pulse');
-                statusText.innerText = text;
+        function simulateLocation() {
+            isSimulated = true;
+            currentGeohash = "t1q7hk9vj"; // Tiered Classroom Location
+
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
             }
-        }
 
-        function checkIdentity() {
-            const stored = localStorage.getItem(STORE_KEY);
-            if (stored) {
-                const identity = JSON.parse(stored);
-                document.getElementById('identity-section').classList.add('hidden');
-                document.getElementById('identity-display').classList.remove('hidden');
-                document.getElementById('active-role').innerText = identity.role;
-                enableUnlockIfReady();
-            } else {
-                document.getElementById('identity-section').classList.remove('hidden');
-                document.getElementById('identity-display').classList.add('hidden');
+            // Explicitly force class replacement for indicator
+            const indicator = document.getElementById('loc-indicator');
+            indicator.className = "w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_10px_#3b82f6]";
+
+            const simBtn = document.getElementById('header-sim-btn');
+            if (simBtn) {
+                simBtn.classList.remove('bg-blue-500', 'animate-pulse');
+                simBtn.classList.add('bg-green-600', 'border-green-400');
+                simBtn.innerText = "AT DOOR (SIM)";
             }
+
+            // Ensure error modal is closed
+            document.getElementById('error-modal').classList.add('hidden');
+            console.log("Location Simulated: t1q7hk9vj");
+            // No alert to keep flow smooth
         }
 
-        function selectRole(role) {
-            // Update UI
-            document.querySelectorAll('.role-btn').forEach(b => {
-                b.classList.remove('border-blue-500', 'bg-blue-900/20');
-            });
-            event.target.classList.add('border-blue-500', 'bg-blue-900/20');
+        function handleLogin() {
+            const password = document.getElementById('admin-pass')?.value;
+            const pin = document.getElementById('faculty-pin').value;
+            const section = document.getElementById('user-section').value;
+            const facName = document.getElementById('faculty-name').value;
+            const facId = document.getElementById('faculty-id').value;
 
-            // Generate secret (simulated registration)
-            axios.get('/mobile/setup?role=' + role).then(res => {
-                localStorage.setItem(STORE_KEY, JSON.stringify(res.data));
-                checkIdentity();
-            });
-        }
-
-        function resetIdentity() {
-            localStorage.removeItem(STORE_KEY);
-            location.reload();
-        }
-
-        function enableUnlockIfReady() {
-            const btn = document.getElementById('unlock-btn');
-            const stored = localStorage.getItem(STORE_KEY);
-            if (currentGeohash && stored && currentDoor) {
-                btn.disabled = false;
-                btn.classList.replace('bg-gray-800', 'bg-blue-600');
-                btn.classList.replace('text-gray-500', 'text-white');
-                document.getElementById('btn-text').innerText = "REQUEST ACCESS";
+            if (currentRole === ROLES.FACULTY && (!facName || !facId || !pin || !section)) {
+                showError("Please fill in Name, ID, PIN and Section."); return;
             }
-        }
+            if (currentRole === ROLES.STUDENT && !section) {
+                showError("Please select your section."); return;
+            }
 
-        async function requestUnlock() {
-            const overlay = document.getElementById('processing-overlay');
-            const progress = document.getElementById('progress-step');
-            overlay.classList.remove('hidden');
+            // Identity binding (ensure uppercase)
+            identity = {
+                role: currentRole.toUpperCase(),
+                password: password,
+                pin: pin,
+                section: section,
+                faculty_name: facName,
+                faculty_id: facId
+            };
 
-            try {
-                const identity = JSON.parse(localStorage.getItem(STORE_KEY));
-                const prover = new SchnorrProverJS(identity.secret);
+            showProc(true, "Synchronizing Identity...");
+            // Ensure location is initialized as soon as identity is binding
+            initAutoLocation();
 
-                progress.innerText = "Hashing local parameters...";
-                await new Promise(r => setTimeout(r, 400));
-
-                progress.innerText = "Constructing Zero-Knowledge Proof...";
-                // We pass currentGeohash to bind it to the proof
-                const proof = await prover.generateProof(currentGeohash);
-
-                progress.innerText = "Transmitting Proof to Verifier...";
-                const payload = {
-                    door_id: currentDoor,
-                    proof: proof,
-                    geohash: currentGeohash
-                };
-
-                const res = await axios.post('/api/verify', payload);
-
-                overlay.classList.add('hidden');
-                if (res.data.status === 'success') {
-                    document.getElementById('success-popup').classList.remove('hidden');
+            axios.get(`/mobile/setup?role=${currentRole}`).then(res => {
+                identity.secret = res.data.secret;
+                showProc(false);
+                if (currentRole === ROLES.ADMIN) {
+                    showView('admin-view');
+                    loadRoomQRs('admin-qr-list', true);
                 } else {
-                    showError(res.data.message);
+                    showView('scanner-view');
+                    // Scanner is not started by default anymore, only when toggled
+                    loadRoomQRs('sim-qr-list', false, identity);
+                }
+            }).catch(e => {
+                showProc(false);
+                showError("Identity Setup Failed: " + e.message);
+            });
+        }
+
+        function toggleQRDisplay() {
+            const reader = document.getElementById('reader-container');
+            const btn = document.getElementById('qr-toggle-btn');
+            const isHidden = reader.classList.contains('hidden');
+
+            if (isHidden) {
+                reader.classList.remove('hidden');
+                btn.innerText = "Close Physical Scanner";
+                startScanner();
+            } else {
+                reader.classList.add('hidden');
+                btn.innerText = "Open Physical Scanner";
+                if (html5QrScanner) html5QrScanner.stop();
+            }
+        }
+
+        function startScanner() {
+            html5QrScanner = new Html5Qrcode("reader", { verbose: false });
+            const config = { fps: 15, qrbox: { width: 250, height: 250 } };
+
+            html5QrScanner.start({ facingMode: "environment" }, config, (decodedText) => {
+                let doorId = decodedText;
+                if (decodedText.includes('?door=')) {
+                    doorId = new URL(decodedText).searchParams.get('door');
+                } else if (decodedText.includes('/s/')) {
+                    doorId = decodedText.split('/s/')[1];
                 }
 
-            } catch (e) {
-                overlay.classList.add('hidden');
-                showError(e.response?.data?.message || e.message);
+                if (doorId) {
+                    html5QrScanner.stop().then(() => {
+                        triggerUnlock(doorId);
+                    }).catch(err => {
+                        console.error("Scanner Stop Error:", err);
+                        triggerUnlock(doorId);
+                    });
+                }
+            });
+        }
+
+        async function triggerUnlock(doorId) {
+            // LOCATION CHECK: Strict enforcement for Faculty/Student
+            if (currentRole !== ROLES.ADMIN) {
+                if (!currentGeohash) {
+                    showError("Access Denied: GPS location must be ON to unlock the door.");
+                    // No auto-restart of scanner here, user needs to re-toggle if they want to use physical scanner again
+                    return;
+                }
+            }
+
+            if (currentRole !== ROLES.ADMIN) {
+                showProc(true, "GENERATING ZK-LOCATION PROOF...");
+                try {
+                    const prover = new SchnorrProverJS(identity.secret);
+                    const proof = await prover.generateProof(currentGeohash || "0000000000");
+
+                    const payload = {
+                        door_id: doorId,
+                        role: identity.role,
+                        proof: proof,
+                        geohash: currentGeohash || "0000000000",
+                        password: identity.password,
+                        pin: identity.pin,
+                        section: identity.section,
+                        faculty_name: identity.faculty_name,
+                        faculty_id: identity.faculty_id
+                    };
+
+                    const res = await axios.post('/api/verify', payload);
+                    showProc(false);
+                    document.getElementById('success-msg').innerText = res.data.message;
+
+                    if (isAutomatedScan) {
+                        const btn = document.getElementById('success-btn');
+                        btn.innerText = "ACCESS GRANTED - YOU MAY CLOSE THIS TAB";
+                        btn.onclick = () => { alert("Success! You can now safely close this tab."); };
+                    }
+
+                    document.getElementById('success-modal').classList.replace('hidden', 'flex');
+                } catch (e) {
+                    showProc(false);
+                    const msg = e.response?.data?.message || e.message;
+                    showError(msg);
+                    if (msg.toLowerCase().includes("location limit") || msg.toLowerCase().includes("too far")) {
+                        document.getElementById('error-msg').innerText = "ACCESS DENIED DUE TO LOCATION LIMIT\n(You must be within 5 meters)";
+                    }
+                    // No auto-restart of scanner here, user needs to re-toggle if they want to use physical scanner again
+                }
+            } else {
+                // ADMIN: Direct Unlock without ZKP
+                showProc(true, "REMOTE UNLOCKING...");
+                try {
+                    const payload = {
+                        door_id: doorId,
+                        role: identity.role,
+                        proof: { public_key: "0", commitment: "0", response: "0", geohash: "0" }, // Dummy proof for types
+                        geohash: "0000000000",
+                        password: identity.password
+                    };
+                    const res = await axios.post('/api/verify', payload);
+                    showProc(false);
+                    document.getElementById('success-msg').innerText = res.data.message;
+                    document.getElementById('success-modal').classList.replace('hidden', 'flex');
+                } catch (e) {
+                    showProc(false);
+                    showError(e.response?.data?.message || e.message);
+                }
             }
         }
 
-        function showError(msg) {
-            document.getElementById('error-detail').innerText = msg;
-            document.getElementById('error-popup').classList.remove('hidden');
+        function loadRoomQRs(targetId, isAdminOverride, ident) {
+            let url = '/api/room_qrs?_t=' + Date.now();
+            if (ident) {
+                if (ident.role) url += `&role=${ident.role}`;
+                if (ident.section) url += `&section=${ident.section}`;
+                if (ident.faculty_name) url += `&faculty_name=${ident.faculty_name}`;
+                if (ident.faculty_id) url += `&faculty_id=${ident.faculty_id}`;
+                if (ident.pin) url += `&pin=${ident.pin}`;
+            }
+
+            axios.get(url).then(res => {
+                const container = document.getElementById(targetId);
+                container.innerHTML = '';
+                res.data.forEach(room => {
+                    const div = document.createElement('div');
+                    div.className = "glass p-4 rounded-2xl text-center space-y-4";
+
+                    let buttonHtml = '';
+                    let qrHtml = '';
+
+                    if (isAdminOverride) {
+                        buttonHtml = `<button onclick="triggerUnlock('${room.id}')" class="w-full bg-red-500/20 text-red-500 p-2 rounded-xl uppercase font-bold text-[10px] tracking-widest border border-red-500/30 hover:bg-red-500 hover:text-white transition-all">Direct Remote Unlock</button>`;
+                    } else {
+                        qrHtml = `<img src="${room.qr_data}" class="mx-auto rounded-lg border border-gray-800 w-48 h-48">`;
+                    }
+
+                    div.innerHTML = `
+                        <h3 class="font-bold text-blue-400 cyber-font text-xs uppercase">${room.name}</h3>
+                        ${qrHtml}
+                        ${buttonHtml}
+                    `;
+                    container.appendChild(div);
+                });
+            }).catch(err => {
+                console.error("Failed to load QR codes:", err);
+            });
+        }
+
+        function fetchHistory() {
+            showView('logs-view');
+            axios.get('/history').then(res => {
+                const list = document.getElementById('logs-list');
+                list.innerHTML = '';
+                res.data.reverse().forEach(log => {
+                    const el = document.createElement('div');
+                    const isDenied = log.status.includes('DENIED');
+                    const statusColor = isDenied ? 'text-red-500' : 'text-green-500';
+                    const borderColor = isDenied ? 'border-red-500/20' : 'border-green-500/20';
+
+                    let userLabel = log.role;
+                    if (log.role === 'FACULTY' && log.faculty_name) {
+                        userLabel = `<span class="text-blue-400 font-bold">${log.faculty_name}</span> <span class="text-gray-500">[${log.faculty_id}]</span>`;
+                    } else {
+                        userLabel = `<span class="text-blue-400 font-bold">${log.role}</span>`;
+                    }
+
+                    el.className = `glass p-4 rounded-xl text-xs flex justify-between border ${borderColor}`;
+                    el.innerHTML = `
+                        <div>
+                            ${userLabel}
+                            <span class="text-gray-500 ml-2">Section ${log.section}</span>
+                            <p class="mt-1 text-white font-semibold">${log.door_name}</p>
+                        </div>
+                        <div class="text-right flex flex-col justify-between items-end">
+                            <p class="text-gray-600 text-[10px]">${log.timestamp}</p>
+                            <span class="${statusColor} font-bold uppercase tracking-tighter text-[9px] bg-${isDenied ? 'red' : 'green'}-500/10 px-2 py-0.5 rounded border border-${isDenied ? 'red' : 'green'}-500/20">${log.status}</span>
+                        </div>
+                    `;
+                    list.appendChild(el);
+                });
+            });
+        }
+
+        function showView(id) {
+            ['login-view', 'admin-view', 'scanner-view', 'logs-view'].forEach(v => document.getElementById(v).classList.add('hidden'));
+            document.getElementById(id).classList.remove('hidden');
+
+            if (id === 'scanner-view') {
+                document.getElementById('simulation-qrs').classList.remove('hidden');
+                document.getElementById('reader-container').classList.add('hidden');
+                const btn = document.getElementById('qr-toggle-btn');
+                if (btn) btn.innerText = "Open Physical Scanner";
+            }
+        }
+
+        function showProc(s, m) {
+            document.getElementById('proc-msg').innerText = m;
+            document.getElementById('proc-overlay').classList.toggle('hidden', !s);
+            document.getElementById('proc-overlay').classList.toggle('flex', s);
+        }
+
+        function showError(m) {
+            document.getElementById('error-msg').innerText = m;
+            document.getElementById('error-modal').classList.replace('hidden', 'flex');
+        }
+
+        function hideError() {
+            document.getElementById('error-modal').classList.replace('flex', 'hidden');
         }
     </script>
+
 </body>
 
 </html>

@@ -50,7 +50,7 @@ function sha256_sync(ascii) {
     var isComposite = {};
     for (var candidate = 2; primeCounter < 64; candidate++) {
         if (!isComposite[candidate]) {
-            for (i = 0; i < 313; i += candidate) {
+            for (let i = 0; i < 313; i += candidate) {
                 isComposite[i] = candidate;
             }
             hash[primeCounter] = (mathPow(candidate, .5) * maxWord) | 0;
@@ -131,7 +131,12 @@ class SchnorrProverJS {
     async generateProof(geohash) {
         // 1. Random nonce r
         const array = new Uint8Array(32);
-        crypto.getRandomValues(array);
+        if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+            crypto.getRandomValues(array);
+        } else {
+            // Fallback for non-secure contexts if needed, though less secure
+            for (let j = 0; j < 32; j++) array[j] = Math.floor(Math.random() * 256);
+        }
         let hex = "0x" + Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
         let r = BigInt(hex) % (Q - 1n) + 1n;
 
@@ -139,8 +144,9 @@ class SchnorrProverJS {
         let R = powerMod(G, r, P);
 
         // 3. Challenge c = Hash(R, Public Key, geohash_prefix)
-        const geohashPrefix = geohash.substring(0, 6);
+        const geohashPrefix = geohash.substring(0, 9);
         let challengeInput = R.toString() + this.publicKey.toString() + geohashPrefix;
+        console.log("DEBUG: ZKP Challenge Input (JS):", challengeInput);
         let cBig = await sha256(challengeInput);
         let c = cBig % Q;
 

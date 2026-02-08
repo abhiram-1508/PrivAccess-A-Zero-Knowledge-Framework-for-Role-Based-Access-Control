@@ -19,22 +19,38 @@ use qrcode::QrCode;
 use base64::{Engine as _, engine::general_purpose};
 use tokio::sync::broadcast;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 struct ZkProofPayload {
     proof: Option<serde_json::Value>,
-    publicSignals: Option<serde_json::Value>,
+    public_signals: Option<serde_json::Value>,
     demo: Option<bool>,
-    userHash: Option<String>,
-    allowedPrefix: Option<String>,
+    user_hash: Option<String>,
+    allowed_prefix: Option<String>,
 }
+
+#[derive(Serialize, Clone, Debug)]
+struct AccessHistory {
+    role: String,
+    door_name: String,
+    section: String,
+    timestamp: String,
+    status: String,
+    faculty_name: Option<String>,
+    faculty_id: Option<String>,
+}
+
+static ACCESS_LOGS: Lazy<std::sync::Mutex<Vec<AccessHistory>>> = Lazy::new(|| {
+    std::sync::Mutex::new(Vec::new())
+});
 
 async fn verify_zkp(Json(payload): Json<ZkProofPayload>) -> impl IntoResponse {
     // === DEMO MODE BYPASS ===
     // If ZKP artifacts are missing, we still want the demo to show the "Privacy-Preserving Geofence" logic.
     if let Some(true) = payload.demo {
         println!("DEBUG: Verifying in DEMO MODE (Simulation)...");
-        let user_hash = payload.userHash.unwrap_or_default();
-        let allowed_prefix = payload.allowedPrefix.unwrap_or_default();
+        let user_hash = payload.user_hash.unwrap_or_default();
+        let allowed_prefix = payload.allowed_prefix.unwrap_or_default();
         
         // Ensure at least 6 characters match (same as the ZK circuit)
         if user_hash.starts_with(&allowed_prefix) && allowed_prefix.len() >= 6 {
@@ -50,7 +66,7 @@ async fn verify_zkp(Json(payload): Json<ZkProofPayload>) -> impl IntoResponse {
         Some(p) => p,
         None => return (StatusCode::BAD_REQUEST, "Missing proof").into_response(),
     };
-    let public_signals = match payload.publicSignals {
+    let public_signals = match payload.public_signals {
         Some(s) => s,
         None => return (StatusCode::BAD_REQUEST, "Missing public signals").into_response(),
     };
@@ -97,7 +113,7 @@ mod rbac;
 mod zkp;
 
 use crate::crypto::{P, G, power_mod, get_random_secret};
-use crate::rbac::{ROLES, get_role_secret};
+use crate::rbac::get_role_secret;
 use crate::zkp::{SchnorrVerifier, Proof};
 
 // --- App State ---
@@ -108,20 +124,34 @@ struct AppState {
 
 // --- Constants & Data ---
 
-#[derive(Clone, Serialize)]
+#[derive(Serialize, Clone, Debug)]
 struct Door {
     name: String,
     #[allow(dead_code)]
     secret_qr: String,
     geohash_prefix: String,
+    qr_url: Option<String>,
 }
 
 static DOORS: Lazy<HashMap<String, Door>> = Lazy::new(|| {
     let mut m = HashMap::new();
-    m.insert("101".to_string(), Door {
-        name: "Computer Lab A".to_string(),
-        secret_qr: "3f334a1714eb61d5ab08730948518608".to_string(),
-        geohash_prefix: "t1q7hk".to_string(),
+    m.insert("tiered".to_string(), Door {
+        name: "Tiered Classroom".to_string(),
+        secret_qr: "tiered_secret".to_string(),
+        geohash_prefix: "t1q7hk9vj".to_string(), // 9 chars ~= 5m
+        qr_url: None,
+    });
+    m.insert("normal".to_string(), Door {
+        name: "Normal Classroom".to_string(),
+        secret_qr: "normal_secret".to_string(),
+        geohash_prefix: "t1q7hk9uh".to_string(), 
+        qr_url: None,
+    });
+    m.insert("lab".to_string(), Door {
+        name: "Lab".to_string(),
+        secret_qr: "lab_secret".to_string(),
+        geohash_prefix: "t1q7hk9tk".to_string(),
+        qr_url: None,
     });
     m
 });
@@ -150,10 +180,12 @@ async fn main() {
     // Build Router
     let app = Router::new()
         .route("/", get(index))
+        .route("/history", get(api_get_history))
+        .route("/api/room_qrs", get(api_room_qrs))
         .route("/door/:door_id", get(door_display))
         .route("/door/:door_id/status", get(door_status_stream))
         .route("/s/:door_id", get(short_scan))
-        .route("/api/notify_status", post(api_notify_status)) // New: Notify door of mobile status
+        .route("/api/notify_status", post(api_notify_status)) 
         .route("/mobile/scan", get(mobile_scan))
         .route("/mobile/setup", get(mobile_setup))
         .route("/api/verify", post(api_verify))
@@ -161,25 +193,106 @@ async fn main() {
         .nest_service("/static", ServeDir::new("static"))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = match tokio::net::TcpListener::bind("0.0.0.0:3000").await {
+        Ok(l) => l,
+        Err(e) => {
+            println!("\n❌ PORT CONFLICT ERROR: {}", e);
+            println!("==================================================");
+            println!("ERROR: Port 3000 is still being held by an old process.");
+            println!("TO FIX THIS ON WINDOWS, RUN THESE COMMANDS:");
+            println!("1. netstat -ano | findstr :3000");
+            println!("2. taskkill /F /PID <THE_PID_FROM_STEP_1>");
+            println!("==================================================\n");
+            return;
+        }
+    };
     
     let lan_ip = get_local_ip();
     println!("\n{}", "=".repeat(50));
     println!("🚀 PRIVACCESS SYSTEM STARTED");
     println!("{}", "=".repeat(50));
-    println!("🖥️  DOOR DISPLAY (Open this in your browser):");
-    println!("   http://localhost:3000/door/101");
-    println!("   http://{}:3000/door/101 (LAN)", lan_ip);
+    println!("🖥️  MAIN GATEWAY (Select Role):");
+    println!("   http://localhost:3000/");
+    println!("   http://{}:3000/ (LAN)", lan_ip);
     println!("{}", "-".repeat(50));
-    println!("📱 MOBILE SCAN SIMULATION (Optional):");
-    println!("   http://localhost:3000/s/101");
     println!("{}\n", "=".repeat(50));
 
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn index() -> Redirect {
-    Redirect::to("/door/101")
+async fn index(
+    axum::extract::State(state): axum::extract::State<Arc<AppState>>,
+) -> impl IntoResponse {
+    let context = Context::new();
+    match state.tera.render("index.html", &context) {
+        Ok(html) => Html(html).into_response(),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Template Error: {}", err)).into_response(),
+    }
+}
+
+async fn api_get_history() -> impl IntoResponse {
+    let logs = ACCESS_LOGS.lock().unwrap();
+    Json(json!(logs.clone()))
+}
+
+#[derive(Deserialize)]
+struct QrParams {
+    role: Option<String>,
+    section: Option<String>,
+    faculty_name: Option<String>,
+    faculty_id: Option<String>,
+    pin: Option<String>,
+}
+
+async fn api_room_qrs(
+    Query(q_params): Query<QrParams>,
+    req: axum::http::Request<axum::body::Body>,
+) -> impl IntoResponse {
+    let host = req.headers()
+        .get("host")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("localhost:3000");
+
+    let final_host = if host.starts_with("localhost") || host.starts_with("127.0.0.1") {
+        let ip = get_local_ip();
+        format!("{}:3000", ip)
+    } else {
+        host.to_string()
+    };
+
+    let mut room_qrs = Vec::new();
+    for (id, door) in DOORS.iter() {
+        let mut mobile_url = format!("http://{}/mobile/scan?door={}", final_host, id);
+        
+        // Append identity if present
+        if let Some(ref r) = q_params.role { mobile_url.push_str(&format!("&role={}", r)); }
+        if let Some(ref s) = q_params.section { mobile_url.push_str(&format!("&section={}", s)); }
+        if let Some(ref n) = q_params.faculty_name { mobile_url.push_str(&format!("&faculty_name={}", urlencoding::encode(n))); }
+        if let Some(ref i) = q_params.faculty_id { mobile_url.push_str(&format!("&faculty_id={}", urlencoding::encode(i))); }
+        if let Some(ref p) = q_params.pin { mobile_url.push_str(&format!("&pin={}", p)); }
+
+        let code = QrCode::new(mobile_url.as_bytes()).unwrap();
+        let width = code.width();
+        let mut img = image::GrayImage::new(width as u32, width as u32);
+        for (i, color) in code.to_colors().into_iter().enumerate() {
+            let x = (i % width) as u32;
+            let y = (i / width) as u32;
+            let pixel = if color == qrcode::Color::Dark { image::Luma([0u8]) } else { image::Luma([255u8]) };
+            img.put_pixel(x, y, pixel);
+        }
+        let upscaled = image::imageops::resize(&img, 300, 300, image::imageops::FilterType::Nearest);
+        let mut buffer = std::io::Cursor::new(Vec::new());
+        let dynamic_image = image::DynamicImage::ImageLuma8(upscaled);
+        dynamic_image.write_to(&mut buffer, image::ImageFormat::Png).unwrap();
+        let b64 = general_purpose::STANDARD.encode(buffer.into_inner());
+        
+        room_qrs.push(json!({
+            "id": id,
+            "name": door.name,
+            "qr_data": format!("data:image/png;base64,{}", b64)
+        }));
+    }
+    Json(room_qrs)
 }
 
 fn get_local_ip() -> String {
@@ -323,6 +436,9 @@ async fn mobile_scan(
         context.insert("door_id", &d);
     }
 
+    context.insert("faculties", crate::rbac::FACULTIES);
+    context.insert("sections", crate::rbac::SECTIONS);
+
     match state.tera.render("mobile_app.html", &context) {
         Ok(html) => Html(html).into_response(),
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Template Error: {}", err)).into_response(),
@@ -354,89 +470,122 @@ async fn mobile_setup(Query(params): Query<SetupParams>) -> impl IntoResponse {
 // === 3. Verification ===
 #[derive(Deserialize, Debug)]
 struct VerifyPayload {
-    #[allow(dead_code)]
     door_id: String,
+    role: String,
     proof: Proof,
     geohash: String,
+    password: Option<String>,
+    pin: Option<String>,
+    section: Option<String>,
+    faculty_name: Option<String>,
+    faculty_id: Option<String>,
 }
 
 async fn api_verify(Json(payload): Json<VerifyPayload>) -> impl IntoResponse {
-    println!("TERMINAL: [DOOR {}] RECEIVED ACCESS REQUEST", payload.door_id);
-    println!("DEBUG: Received Payload: {:?}", payload);
+    let door_id = payload.door_id.trim();
+    println!("TERMINAL: [DOOR {}] RECEIVED ACCESS REQUEST FROM {}", door_id, payload.role);
 
     // 1. Check Door Existence
-    let door = match DOORS.get(payload.door_id.trim()) {
+    let door = match DOORS.get(door_id) {
         Some(d) => d,
         None => {
-            println!("TERMINAL: [DOOR {}] ACCESS DENIED: Door Not Found", payload.door_id);
-            return (StatusCode::NOT_FOUND, Json(json!({
-                "status": "failed",
-                "message": "Access Denied: Door Not Found"
-            }))).into_response()
+            return (StatusCode::NOT_FOUND, Json(json!({"status": "failed", "message": "Door Not Found"}))).into_response()
         },
     };
 
-    // 2. Verify Geohash (Proximity Check)
-    println!("TERMINAL: [DOOR {}] Verifying Proximity: Local={} | Required={}", 
-        payload.door_id, payload.geohash, door.geohash_prefix);
-        
-    if !payload.geohash.starts_with(&door.geohash_prefix) {
-        println!("TERMINAL: [DOOR {}] ACCESS DENIED: Outside Proximity", payload.door_id);
-        return (StatusCode::FORBIDDEN, Json(json!({
-            "status": "failed",
-            "message": "Access Denied: User is outside the door proximity"
-        }))).into_response();
-    }
-
-    // Extra check: Ensure the geohash inside the proof matches
-    if payload.proof.geohash != payload.geohash {
-        println!("TERMINAL: [DOOR {}] ACCESS DENIED: Geohash Mismatch/Tampering", payload.door_id);
-        return (StatusCode::FORBIDDEN, Json(json!({
-             "status": "failed",
-             "message": "Access Denied: Geohash tampering detected"
-         }))).into_response();
-    }
-
-    // 3. Verify Schnorr Proof (Identity + Location Binding)
-    println!("TERMINAL: [DOOR {}] Initiating ZKP Identity Verification...", payload.door_id);
-    if !SchnorrVerifier::verify_proof(&payload.proof) {
-         println!("TERMINAL: [DOOR {}] ACCESS DENIED: Invalid ZKP", payload.door_id);
-         return (StatusCode::FORBIDDEN, Json(json!({
-             "status": "failed",
-             "message": "Access Denied: Invalid Zero-Knowledge Proof"
-         }))).into_response();
-    }
-
-    // 4. RBAC Logic
-    let prover_pub_key = payload.proof.public_key.clone();
-    let mut role_found = None;
-    
-    // Check against known roles
-    for (role_name, secret) in ROLES.iter() {
-        let pk = power_mod(&G, secret, &P).to_string();
-        if pk == prover_pub_key {
-            role_found = Some(role_name.clone());
-            break;
-        }
-    }
-
-    match role_found {
-        Some(role) => {
-            println!("TERMINAL: [DOOR {}] SUCCESS: Access Granted to {}", payload.door_id, role);
-            let _ = DOOR_STATUS_TX.send((payload.door_id.clone(), "unlocked".to_string()));
-            
-            Json(json!({
-                "status": "success",
-                "message": format!("Access Granted to {}", role),
-                "role": role
-            })).into_response()
+    // 2. Authentication Logic
+    match payload.role.as_str() {
+        "ADMIN" => {
+            if payload.password.as_deref() != Some(crate::rbac::ADMIN_PASSWORD) {
+                log_denied(&payload, door, "Incorrect Admin Password");
+                return (StatusCode::UNAUTHORIZED, Json(json!({"status": "failed", "message": "Incorrect Admin Password"}))).into_response();
+            }
+            // Admin has remote access - Skip Proximity check
+            println!("TERMINAL: [DOOR {}] ADMIN REMOTE ACCESS GRANTED", door_id);
         },
-        None => {
-            println!("TERMINAL: [DOOR {}] ACCESS DENIED: Authenticated but Unauthorized Role", payload.door_id);
-            (StatusCode::FORBIDDEN, Json(json!({
-                "status": "failed",
-                "message": "Access Denied: Unauthorized Identity"
-            }))).into_response()
+        "FACULTY" => {
+            let pin = payload.pin.as_deref().unwrap_or("");
+            let fac_id = payload.faculty_id.as_deref().unwrap_or("");
+            let fac_name = payload.faculty_name.as_deref().unwrap_or("");
+
+            let faculty_match = crate::rbac::FACULTIES.iter().find(|f| {
+                f.id == fac_id && f.name == fac_name && f.pin == pin
+            });
+
+            if faculty_match.is_none() {
+                println!("TERMINAL: [DOOR {}] FACULTY LOGIN FAILED: Name='{}', ID='{}', PIN='{}'", door_id, fac_name, fac_id, pin);
+                log_denied(&payload, door, "Invalid Faculty Credentials");
+                return (StatusCode::UNAUTHORIZED, Json(json!({"status": "failed", "message": "Invalid Name, ID, or PIN for Faculty"}))).into_response();
+            }
+            // Proximity Check (Relaxed to 6 chars for Demo - approx 1.2km)
+            let req_prefix = if door.geohash_prefix.len() >= 6 { &door.geohash_prefix[0..6] } else { &door.geohash_prefix };
+            if !payload.geohash.starts_with(req_prefix) {
+                 log_denied(&payload, door, "Access Denied: Location Mismatch");
+                 println!("TERMINAL: [DOOR {}] FACULTY DENIED DUE TO LOCATION. Expected prefix: {}, Got: {}", door_id, req_prefix, payload.geohash);
+                 return (StatusCode::FORBIDDEN, Json(json!({"status": "failed", "message": "Access Denied: You must be near the room to unlock."}))).into_response();
+            }
+        },
+        "STUDENT" => {
+            let section = payload.section.as_deref().unwrap_or("");
+            if !crate::rbac::SECTIONS.contains(&section) {
+                log_denied(&payload, door, "Invalid Section");
+                return (StatusCode::BAD_REQUEST, Json(json!({"status": "failed", "message": "Invalid Section Selected"}))).into_response();
+            }
+            // Proximity Check (Relaxed to 6 chars for Demo)
+            let req_prefix = if door.geohash_prefix.len() >= 6 { &door.geohash_prefix[0..6] } else { &door.geohash_prefix };
+            if !payload.geohash.starts_with(req_prefix) {
+                 log_denied(&payload, door, "Access Denied: Location Mismatch");
+                 return (StatusCode::FORBIDDEN, Json(json!({"status": "failed", "message": "Access Denied: You must be near the room to unlock."}))).into_response();
+            }
+        },
+        _ => return (StatusCode::BAD_REQUEST, Json(json!({"status": "failed", "message": "Invalid Role"}))).into_response(),
+    }
+
+    // 3. Verify Schnorr Proof (Identity Binding) - SKIP FOR ADMIN
+    if payload.role != "ADMIN" {
+        if !SchnorrVerifier::verify_proof(&payload.proof) {
+             log_denied(&payload, door, "Invalid Zero-Knowledge Proof");
+             return (StatusCode::FORBIDDEN, Json(json!({"status": "failed", "message": "Invalid Zero-Knowledge Proof"}))).into_response();
         }
     }
+
+    // 4. Log Success
+    let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let history = AccessHistory {
+        role: payload.role.clone(),
+        door_name: door.name.clone(),
+        section: payload.section.unwrap_or_else(|| "N/A".to_string()),
+        timestamp,
+        status: "GRANTED".to_string(),
+        faculty_name: payload.faculty_name.clone(),
+        faculty_id: payload.faculty_id.clone(),
+    };
+    
+    {
+        let mut logs = ACCESS_LOGS.lock().unwrap();
+        logs.push(history);
+    }
+
+    let _ = DOOR_STATUS_TX.send((door_id.to_string(), "unlocked".to_string()));
+    
+    Json(json!({
+        "status": "success",
+        "message": format!("Access Granted to {}", payload.role),
+        "role": payload.role
+    })).into_response()
+}
+
+fn log_denied(payload: &VerifyPayload, door: &Door, reason: &str) {
+    let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let history = AccessHistory {
+        role: payload.role.clone(),
+        door_name: door.name.clone(),
+        section: payload.section.clone().unwrap_or_else(|| "N/A".to_string()),
+        timestamp,
+        status: format!("DENIED: {}", reason),
+        faculty_name: payload.faculty_name.clone(),
+        faculty_id: payload.faculty_id.clone(),
+    };
+    let mut logs = ACCESS_LOGS.lock().unwrap();
+    logs.push(history);
 }
