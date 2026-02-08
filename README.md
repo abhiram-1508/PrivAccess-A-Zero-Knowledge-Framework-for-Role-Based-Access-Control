@@ -1,5 +1,7 @@
 # PrivAccess - A Zero-Knowledge Framework for Role-Based Access Control
 
+🚀 **Now with Zero-Touch 'Just Scan' Workflow**
+
 📌 **Abstract**
 
 PrivAccess is a privacy-preserving access control framework that integrates Zero-Knowledge Proofs (ZKP) with Role-Based Access Control (RBAC) to authenticate users without revealing sensitive identity or role information. The system ensures that users can prove authorization to access protected resources while maintaining confidentiality of credentials.
@@ -37,34 +39,13 @@ PrivAccess is a privacy-preserving access control framework that integrates Zero
 
 ```
 PrivAccess/
-├── main.py                 # CLI demonstration entry point
-├── app.py                  # Flask Web Application entry point
-├── requirements.txt        # Python dependencies
-├── README.md               # This file
-│
-├── zkp/                    # Zero-Knowledge Proof modules
-│   ├── prover.py           # Schnorr Prover implementation
-│   └── verifier.py         # Schnorr Verifier implementation
-│
-├── rbac/                   # Role-Based Access Control
-│   ├── roles.py            # Role definitions and secret management
-│   └── access_control.py   # Main access control logic
-│
-├── crypto/                 # Cryptographic utilities
-│   └── hash_utils.py       # Hash functions (optional helper)
-│   └── utils.py            # Mathematical utilities (Modular Exponentiation, Primes)
-│
-├── templates/              # HTML Templates for Web App
-│   ├── door_display.html   # QR Code Display Page
-│   └── mobile_app.html     # Mobile Client Page
-│
-├── static/                 # Static assets (JS, CSS, Images)
-│   ├── js/                 # Client-side ZKP logic
-│   ├── css/                # Stylesheets
-│   └── img/                # Images (e.g., logo.jpg)
-│
-└── tests/                  # Test suite
-    └── test_run.py         # Comprehensive tests
+├── priv_access_rs/         # Main Rust Application
+│   ├── src/                # Backend logic
+│   ├── templates/          # Modern UI
+│   └── static/             # ZKP assets
+├── zkp_circom/             # Circom/SNARKs source
+├── README.md               # Overview & Demo Guide
+└── RUN.md                  # Detailed Setup & Commands
 ```
 
 ## 🚀 Getting Started
@@ -92,22 +73,14 @@ pip install -r requirements.txt
 #### Option 1: Web Interface (Recommended)
 This launches a web server where you can simulate a Mobile App unlocking a Door.
 
-1. Start the Flask server:
+1. Start the Rust server:
 ```bash
-python app.py
+cd priv_access_rs
+cargo run
 ```
-2. Open the displayed URL (e.g., `http://127.0.0.1:5000`) in your browser to see the "Door Lock" with a QR code.
-3. Access the Mobile App simulation by scanning the QR code or navigating to the simulation URL.
-4. **Select a Role** (e.g., ADMIN, FACULTY) to generate an identity.
-5. Click **Unlock** to generate a ZKP and authenticate.
-
-#### Option 2: CLI Demo
-Run the command-line demonstration to test logic directly in the terminal.
-
-```bash
-python main.py
-```
-Follow the interactive prompts to generate and verify proofs.
+2. Open the UI on your **Laptop/PC**: Select **Student** or **Faculty**, enter your credentials, and click **INITIALIZE SESSION**.
+3. **Scan the QR code with your Mobile Phone.**
+4. The mobile app will automatically handle the rest! Zero clicks required on the phone.
 
 ## 🔧 Configuration
 
