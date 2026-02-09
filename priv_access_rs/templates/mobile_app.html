@@ -102,7 +102,6 @@
                     <input type="password" id="admin-pass" class="input-dark" placeholder="Admin Password">
                 </div>
                 <div id="faculty-fields" class="hidden space-y-4">
-                    <input type="text" id="faculty-name" class="input-dark" placeholder="Faculty Name (e.g. Abhi)">
                     <input type="text" id="faculty-id" class="input-dark" placeholder="Faculty ID (e.g. Fac1)">
                 </div>
                 <div id="pin-field" class="hidden">
@@ -145,8 +144,8 @@
                     <div class="space-y-1 text-[9px]">
                         {% for fac in faculties %}
                         <div class="flex justify-between border-b border-gray-800/50 pb-1">
-                            <span class="text-gray-300">{{ fac.name }}</span>
-                            <span class="text-gray-500 font-mono">{{ fac.id }}</span>
+                            <span class="text-gray-300">{{ fac.id }}</span>
+                            <span class="text-gray-500 font-mono">PIN: {{ fac.pin }}</span>
                         </div>
                         {% endfor %}
                     </div>
@@ -180,6 +179,19 @@
             </div>
 
             <p class="text-gray-500 text-sm text-center">Scan a classroom code to request access.</p>
+
+            <!-- Student Verification QR (Check Assignment) -->
+            <div id="verification-qr-section" class="hidden space-y-4 pt-4 border-b border-gray-900 pb-6">
+                <p class="text-[10px] text-green-400 uppercase text-center tracking-[0.3em] font-bold">Check Your
+                    Assignment</p>
+                <div class="glass p-6 rounded-2xl text-center">
+                    <p class="text-xs text-gray-400 mb-4">Scan this QR to see which room your section is assigned to</p>
+                    <button onclick="checkSectionAssignment()"
+                        class="w-full bg-green-500/20 text-green-400 p-4 rounded-xl uppercase font-bold text-sm tracking-widest border border-green-500/30 hover:bg-green-500/30 transition-all">
+                        📍 CHECK MY SECTION'S ROOM
+                    </button>
+                </div>
+            </div>
 
             <!-- Room Security Codes Display (Primary focus) -->
             <div id="simulation-qrs" class="space-y-4 pt-4">
@@ -285,7 +297,6 @@
             identity = {
                 role: params.get('role').toUpperCase(),
                 section: params.get('section'),
-                faculty_name: params.get('faculty_name'),
                 faculty_id: params.get('faculty_id'),
                 pin: params.get('pin')
             };
@@ -327,7 +338,7 @@
                 document.getElementById('pin-field').classList.remove('hidden');
                 document.getElementById('section-field').classList.remove('hidden');
                 document.getElementById('login-title').innerText = "FACULTY AUTH";
-                document.getElementById('login-desc').innerText = "Enter Name, ID, PIN and select section.";
+                document.getElementById('login-desc').innerText = "Enter ID, PIN and select section.";
             } else {
                 document.getElementById('section-field').classList.remove('hidden');
                 document.getElementById('login-title').innerText = "STUDENT ACCESS";
@@ -415,11 +426,10 @@
             const password = document.getElementById('admin-pass')?.value;
             const pin = document.getElementById('faculty-pin').value;
             const section = document.getElementById('user-section').value;
-            const facName = document.getElementById('faculty-name').value;
-            const facId = document.getElementById('faculty-id').value;
+            const facId = document.getElementById('faculty-id')?.value;
 
-            if (currentRole === ROLES.FACULTY && (!facName || !facId || !pin || !section)) {
-                showError("Please fill in Name, ID, PIN and Section."); return;
+            if (currentRole === ROLES.FACULTY && (!facId || !pin || !section)) {
+                showError("Please fill in ID, PIN and Section."); return;
             }
             if (currentRole === ROLES.STUDENT && !section) {
                 showError("Please select your section."); return;
@@ -431,7 +441,6 @@
                 password: password,
                 pin: pin,
                 section: section,
-                faculty_name: facName,
                 faculty_id: facId
             };
 
@@ -447,6 +456,10 @@
                     loadRoomQRs('admin-qr-list', true);
                 } else {
                     showView('scanner-view');
+                    // Show verification QR for students
+                    if (currentRole === ROLES.STUDENT) {
+                        document.getElementById('verification-qr-section').classList.remove('hidden');
+                    }
                     // Scanner is not started by default anymore, only when toggled
                     loadRoomQRs('sim-qr-list', false, identity);
                 }
@@ -519,7 +532,6 @@
                         password: identity.password,
                         pin: identity.pin,
                         section: identity.section,
-                        faculty_name: identity.faculty_name,
                         faculty_id: identity.faculty_id
                     };
 
@@ -570,7 +582,6 @@
             if (ident) {
                 if (ident.role) url += `&role=${ident.role}`;
                 if (ident.section) url += `&section=${ident.section}`;
-                if (ident.faculty_name) url += `&faculty_name=${ident.faculty_name}`;
                 if (ident.faculty_id) url += `&faculty_id=${ident.faculty_id}`;
                 if (ident.pin) url += `&pin=${ident.pin}`;
             }
@@ -615,8 +626,8 @@
                     const borderColor = isDenied ? 'border-red-500/20' : 'border-green-500/20';
 
                     let userLabel = log.role;
-                    if (log.role === 'FACULTY' && log.faculty_name) {
-                        userLabel = `<span class="text-blue-400 font-bold">${log.faculty_name}</span> <span class="text-gray-500">[${log.faculty_id}]</span>`;
+                    if (log.role === 'FACULTY' && log.faculty_id) {
+                        userLabel = `<span class="text-blue-400 font-bold">Faculty ${log.faculty_id}</span>`;
                     } else {
                         userLabel = `<span class="text-blue-400 font-bold">${log.role}</span>`;
                     }
@@ -663,6 +674,36 @@
 
         function hideError() {
             document.getElementById('error-modal').classList.replace('flex', 'hidden');
+        }
+
+        async function checkSectionAssignment() {
+            if (!identity || !identity.section) {
+                showError("Please log in first and select your section.");
+                return;
+            }
+
+            showProc(true, "Checking Section Assignment...");
+
+            try {
+                const res = await axios.get(`/api/check_assignment?section=${identity.section}`);
+                showProc(false);
+
+                if (res.data.assigned) {
+                    document.getElementById('success-msg').innerHTML =
+                        `<div class="text-center">
+                            <p class="text-lg mb-2">Your Section: <span class="text-blue-400 font-bold">${identity.section}</span></p>
+                            <p class="text-2xl font-bold text-green-400">Assigned to:</p>
+                            <p class="text-3xl font-bold mt-2">${res.data.room_name}</p>
+                        </div>`;
+                    document.getElementById('success-btn').innerText = "OK, GOT IT";
+                    document.getElementById('success-modal').classList.replace('hidden', 'flex');
+                } else {
+                    showError(res.data.message || "No room assigned to your section yet. Please check with your faculty.");
+                }
+            } catch (e) {
+                showProc(false);
+                showError("Failed to check assignment: " + (e.response?.data?.message || e.message));
+            }
         }
     </script>
 

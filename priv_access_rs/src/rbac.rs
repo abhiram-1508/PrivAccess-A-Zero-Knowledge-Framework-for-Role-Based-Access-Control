@@ -16,16 +16,15 @@ pub const ADMIN_PASSWORD: &str = "Admin@1234";
 
 #[derive(Debug, Serialize, Clone)]
 pub struct Faculty {
-    pub name: &'static str,
     pub id: &'static str,
     pub pin: &'static str,
 }
 
 pub const FACULTIES: &[Faculty] = &[
-    Faculty { name: "Abhi", id: "Fac1", pin: "1234" },
-    Faculty { name: "Gangadhar", id: "Fac2", pin: "5678" },
-    Faculty { name: "Likhith", id: "Fac3", pin: "9876" },
-    Faculty { name: "Kumar", id: "Fac4", pin: "5432" },
+    Faculty { id: "Fac1", pin: "1234" },
+    Faculty { id: "Fac2", pin: "5678" },
+    Faculty { id: "Fac3", pin: "9876" },
+    Faculty { id: "Fac4", pin: "5432" },
 ];
 
 pub const SECTIONS: &[&str] = &["A", "B", "C", "D", "E", "F", "G", "H"];

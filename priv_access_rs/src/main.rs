@@ -44,6 +44,12 @@ static ACCESS_LOGS: Lazy<std::sync::Mutex<Vec<AccessHistory>>> = Lazy::new(|| {
     std::sync::Mutex::new(Vec::new())
 });
 
+// Section to Room mapping: stores which section is assigned to which room
+static SECTION_ROOM_MAP: Lazy<std::sync::Mutex<HashMap<String, String>>> = Lazy::new(|| {
+    std::sync::Mutex::new(HashMap::new())
+});
+
+
 async fn verify_zkp(Json(payload): Json<ZkProofPayload>) -> impl IntoResponse {
     // === DEMO MODE BYPASS ===
     // If ZKP artifacts are missing, we still want the demo to show the "Privacy-Preserving Geofence" logic.
@@ -182,6 +188,7 @@ async fn main() {
         .route("/", get(index))
         .route("/history", get(api_get_history))
         .route("/api/room_qrs", get(api_room_qrs))
+        .route("/api/check_assignment", get(api_check_assignment))
         .route("/door/:door_id", get(door_display))
         .route("/door/:door_id/status", get(door_status_stream))
         .route("/s/:door_id", get(short_scan))
@@ -192,6 +199,7 @@ async fn main() {
         .route("/verify", post(verify_zkp))
         .nest_service("/static", ServeDir::new("static"))
         .with_state(state);
+
 
     let listener = match tokio::net::TcpListener::bind("0.0.0.0:3000").await {
         Ok(l) => l,
@@ -234,6 +242,31 @@ async fn api_get_history() -> impl IntoResponse {
     let logs = ACCESS_LOGS.lock().unwrap();
     Json(json!(logs.clone()))
 }
+
+#[derive(Deserialize)]
+struct CheckAssignmentParams {
+    section: String,
+}
+
+async fn api_check_assignment(Query(params): Query<CheckAssignmentParams>) -> impl IntoResponse {
+    let map = SECTION_ROOM_MAP.lock().unwrap();
+    
+    if let Some(room_id) = map.get(&params.section) {
+        if let Some(door) = DOORS.get(room_id) {
+            return Json(json!({
+                "assigned": true,
+                "room_name": door.name,
+                "room_id": room_id
+            }));
+        }
+    }
+    
+    Json(json!({
+        "assigned": false,
+        "message": "No room assigned to your section yet"
+    }))
+}
+
 
 #[derive(Deserialize)]
 struct QrParams {
@@ -506,16 +539,16 @@ async fn api_verify(Json(payload): Json<VerifyPayload>) -> impl IntoResponse {
         "FACULTY" => {
             let pin = payload.pin.as_deref().unwrap_or("");
             let fac_id = payload.faculty_id.as_deref().unwrap_or("");
-            let fac_name = payload.faculty_name.as_deref().unwrap_or("");
+            let section = payload.section.as_deref().unwrap_or("");
 
             let faculty_match = crate::rbac::FACULTIES.iter().find(|f| {
-                f.id == fac_id && f.name == fac_name && f.pin == pin
+                f.id == fac_id && f.pin == pin
             });
 
             if faculty_match.is_none() {
-                println!("TERMINAL: [DOOR {}] FACULTY LOGIN FAILED: Name='{}', ID='{}', PIN='{}'", door_id, fac_name, fac_id, pin);
+                println!("TERMINAL: [DOOR {}] FACULTY LOGIN FAILED: ID='{}', PIN='{}'", door_id, fac_id, pin);
                 log_denied(&payload, door, "Invalid Faculty Credentials");
-                return (StatusCode::UNAUTHORIZED, Json(json!({"status": "failed", "message": "Invalid Name, ID, or PIN for Faculty"}))).into_response();
+                return (StatusCode::UNAUTHORIZED, Json(json!({"status": "failed", "message": "Invalid ID or PIN for Faculty"}))).into_response();
             }
             // Proximity Check (Relaxed to 6 chars for Demo - approx 1.2km)
             let req_prefix = if door.geohash_prefix.len() >= 6 { &door.geohash_prefix[0..6] } else { &door.geohash_prefix };
@@ -523,6 +556,13 @@ async fn api_verify(Json(payload): Json<VerifyPayload>) -> impl IntoResponse {
                  log_denied(&payload, door, "Access Denied: Location Mismatch");
                  println!("TERMINAL: [DOOR {}] FACULTY DENIED DUE TO LOCATION. Expected prefix: {}, Got: {}", door_id, req_prefix, payload.geohash);
                  return (StatusCode::FORBIDDEN, Json(json!({"status": "failed", "message": "Access Denied: You must be near the room to unlock."}))).into_response();
+            }
+            
+            // Store section-to-room mapping
+            if !section.is_empty() {
+                let mut map = SECTION_ROOM_MAP.lock().unwrap();
+                map.insert(section.to_string(), door_id.to_string());
+                println!("TERMINAL: [MAPPING] Section {} assigned to room {}", section, door.name);
             }
         },
         "STUDENT" => {
