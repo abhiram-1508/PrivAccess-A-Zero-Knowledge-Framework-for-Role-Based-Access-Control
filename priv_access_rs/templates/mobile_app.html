@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PrivAccess Mobile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Segoe UI', sans-serif;
+            overflow-x: hidden;
+        }
+
+        .cyber-font {
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-blue {
+            width: 100%;
+            background: #2563eb;
+            color: white;
+            font-weight: bold;
+            padding: 1rem;
+            border-radius: 1rem;
+            transition: all 0.2s;
+        }
+
+        .btn-blue:hover {
+            background: #3b82f6;
+        }
+
+        .input-dark {
+            width: 100%;
+            background: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            color: white;
+        }
+
+        #reader {
+            width: 100% !important;
+            border: none !important;
+            border-radius: 1rem;
+            overflow: hidden;
+        }
+
+        #reader__dashboard {
+            background: transparent !important;
+        }
+
+        #reader__status_span {
+            display: none;
+        }
+
+        #reader video {
+            border-radius: 1rem;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header
+        class="p-6 border-b border-gray-900 flex justify-between items-center bg-black/50 sticky top-0 z-40 backdrop-blur-md">
+        <div class="flex items-center space-x-4">
+            <img src="/static/img/logo.jpg" alt="Logo" class="w-10 h-10 rounded-xl border border-blue-500/30">
+            <div>
+                <h1 class="text-xl font-bold cyber-font text-blue-400">PRIVACCESS</h1>
+                <p id="role-label" class="text-[10px] text-gray-500 uppercase tracking-widest mt-1">Authenticating...
+                </p>
+            </div>
+        </div>
+        <div id="loc-indicator" class="w-3 h-3 rounded-full bg-red-500"></div>
+    </header>
+
+    <main class="flex-1 p-6 flex flex-col">
+
+        <!-- Login Form -->
+        <section id="login-view" class="hidden space-y-6">
+            <div class="text-center mb-8">
+                <h2 id="login-title" class="text-2xl font-bold cyber-font mb-2">INITIALIZATION</h2>
+                <p id="login-desc" class="text-gray-500 text-sm">Validating credentials for session initiation.</p>
+            </div>
+
+            <div class="space-y-4">
+                <div id="password-field" class="hidden">
+                    <input type="password" id="admin-pass" class="input-dark" placeholder="Admin Password">
+                </div>
+                <div id="faculty-fields" class="hidden space-y-4">
+                    <input type="text" id="faculty-id" class="input-dark" placeholder="Faculty ID (e.g. Fac1)">
+                </div>
+                <div id="pin-field" class="hidden">
+                    <input type="number" id="faculty-pin" class="input-dark" placeholder="Security PIN">
+                </div>
+                <div id="section-field" class="hidden">
+                    <select id="user-section" class="input-dark">
+                        <option value="" disabled selected>Select Section (A-H)</option>
+                        <option value="A">Section A</option>
+                        <option value="B">Section B</option>
+                        <option value="C">Section C</option>
+                        <option value="D">Section D</option>
+                        <option value="E">Section E</option>
+                        <option value="F">Section F</option>
+                        <option value="G">Section G</option>
+                        <option value="H">Section H</option>
+                    </select>
+                </div>
+                <button onclick="handleLogin()" class="btn-blue mb-4">INITIALIZE SESSION</button>
+                <a href="/"
+                    class="block w-full text-center text-gray-500 hover:text-white text-xs uppercase font-bold tracking-widest transition-all">←
+                    Back to Role Selection</a>
+            </div>
+        </section>
+
+        <!-- Admin View -->
+        <section id="admin-view" class="hidden space-y-8">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-bold cyber-font text-red-500">CENTRAL CONTROL</h2>
+                <div class="flex space-x-2">
+                    <button onclick="fetchHistory()"
+                        class="bg-gray-800 text-gray-400 px-3 py-1 rounded text-[10px] border border-gray-700 uppercase">History</button>
+                    <button onclick="showView('login-view')"
+                        class="bg-gray-800 text-gray-400 px-3 py-1 rounded text-[10px] border border-gray-700 uppercase">Logout</button>
+                </div>
+            </div>
+
+            <!-- Admin Reference Data -->
+            <div class="grid grid-cols-2 gap-4">
+                <div class="glass p-4 rounded-2xl border border-blue-500/10">
+                    <h3 class="text-[10px] text-blue-400 uppercase font-bold mb-2 tracking-widest">Faculty Directory
+                    </h3>
+                    <div class="space-y-1 text-[9px]">
+                        {% for fac in faculties %}
+                        <div class="flex justify-between border-b border-gray-800/50 pb-1">
+                            <span class="text-gray-300">{{ fac.id }}</span>
+                            <span class="text-gray-500 font-mono">PIN: {{ fac.pin }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="glass p-4 rounded-2xl border border-blue-500/10">
+                    <h3 class="text-[10px] text-blue-400 uppercase font-bold mb-2 tracking-widest">Sections</h3>
+                    <div class="flex flex-wrap gap-1">
+                        {% for sec in sections %}
+                        <span
+                            class="bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20 text-[9px]">{{
+                            sec }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div id="admin-qr-container" class="space-y-4">
+                <p class="text-[10px] text-blue-400 uppercase text-center tracking-[0.3em] font-bold">Remote Access
+                    Control</p>
+                <div id="admin-qr-list" class="grid grid-cols-1 gap-4"></div>
+            </div>
+        </section>
+
+        <!-- Scanner View (Faculty/Student) -->
+        <section id="scanner-view" class="hidden space-y-6">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-bold cyber-font text-blue-400">SCAN TO UNLOCK</h2>
+                <div class="flex space-x-2">
+                    <button onclick="showView('login-view')"
+                        class="text-[10px] bg-gray-800 text-gray-400 px-3 py-1 rounded-full border border-gray-700 uppercase hover:bg-gray-700 transition-all">←
+                        Fix Details</button>
+                    <button onclick="toggleQRDisplay()" id="qr-toggle-btn"
+                        class="text-[10px] bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full border border-blue-500/30 uppercase">Open
+                        Physical Scanner</button>
+                </div>
+            </div>
+
+            <p class="text-gray-500 text-sm text-center">Scan a classroom code to request access.</p>
+
+            <!-- Student Verification QR (Check Assignment) -->
+            <div id="student-status-section" class="hidden space-y-4 pt-4 border-b border-gray-900 pb-6">
+                <p id="student-status-title"
+                    class="text-[10px] text-green-400 uppercase text-center tracking-[0.3em] font-bold">Room Allocation
+                    Status</p>
+                <div id="student-status-card" class="glass p-6 rounded-2xl text-center">
+                    <p id="student-status-msg" class="text-sm font-bold text-yellow-500">Initializing status check...
+                    </p>
+                    <button onclick="checkSectionAssignment()"
+                        class="mt-4 w-full bg-blue-500/10 text-blue-400 p-2 rounded-xl uppercase font-bold text-[10px] tracking-widest border border-blue-500/20 hover:bg-blue-500/20 transition-all">
+                        📍 Refresh Status
+                    </button>
+                </div>
+            </div>
+
+            <!-- Room Security Codes Display (Primary focus) -->
+            <div id="simulation-qrs" class="space-y-4 pt-4">
+                <p id="qr-list-title"
+                    class="text-[10px] text-blue-400 uppercase text-center tracking-[0.3em] font-bold">Room Access Codes
+                </p>
+                <div id="sim-qr-list" class="grid grid-cols-1 gap-4"></div>
+            </div>
+
+            <!-- Camera Reader (Secondary focus) -->
+            <div id="reader-container" class="hidden border-t border-gray-900 pt-6">
+                <p class="text-[10px] text-gray-500 uppercase text-center tracking-widest mb-4">Physical Scanner</p>
+                <div id="reader" class="glass overflow-hidden rounded-2xl"></div>
+            </div>
+
+            <div class="p-4 glass rounded-xl text-center">
+                <p class="text-xs text-gray-500 uppercase tracking-widest mb-1">Status</p>
+                <p id="scanner-status" class="text-yellow-500 font-bold">READY TO SCAN</p>
+            </div>
+        </section>
+
+        <!-- Logs View -->
+        <section id="logs-view" class="hidden space-y-6">
+            <div class="flex justify-between items-center">
+                <h2 class="text-xl font-bold cyber-font">ACCESS HISTORY</h2>
+                <button onclick="showView('admin-view')"
+                    class="bg-gray-800 text-gray-400 px-4 py-2 rounded-xl text-xs border border-gray-700 uppercase font-bold hover:bg-gray-700 transition-all">Back
+                    to Dashboard</button>
+            </div>
+            <div id="logs-list" class="space-y-3"></div>
+        </section>
+
+    </main>
+
+    <!-- Overlays -->
+    <div id="proc-overlay" class="fixed inset-0 bg-black/95 z-50 hidden flex-col items-center justify-center">
+        <div class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p id="proc-msg" class="text-blue-500 cyber-font text-sm uppercase">Verifying Location...</p>
+    </div>
+
+    <!-- Modals -->
+    <div id="success-modal"
+        class="fixed inset-0 bg-black z-50 hidden flex-col items-center justify-center p-8 text-center">
+        <div class="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mb-6">
+            <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M5 13l4 4L19 7"></path>
+            </svg>
+        </div>
+        <h2 class="text-2xl font-bold cyber-font mb-2">ACCESS GRANTED</h2>
+        <p id="success-msg" class="text-gray-400 mb-8"></p>
+        <button id="success-btn" onclick="location.reload()" class="btn-blue">CONTINUE</button>
+    </div>
+
+    <div id="error-modal"
+        class="fixed inset-0 bg-black z-50 hidden flex-col items-center justify-center p-8 text-center">
+        <div class="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center mb-6">
+            <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </div>
+        <h2 class="text-2xl font-bold cyber-font mb-2 text-red-500">VERIFICATION FAILED</h2>
+        <p id="error-msg" class="text-gray-400 mb-8"></p>
+        <div class="space-y-4 w-full">
+            <button onclick="backToLogin()"
+                class="w-full bg-blue-600 hover:bg-blue-500 text-white p-5 rounded-2xl border-2 border-blue-400 font-bold cyber-font text-sm uppercase shadow-[0_0_20px_rgba(37,99,235,0.4)]">
+                Back to Login / Re-enter Details
+            </button>
+            <button onclick="simulateLocation()"
+                class="w-full bg-gray-800 hover:bg-gray-700 text-gray-400 p-4 rounded-xl border border-gray-700 font-bold text-xs uppercase">
+                Try Simulation (Demo)
+            </button>
+            <button onclick="hideError()" class="text-gray-500 text-[10px] font-bold uppercase tracking-widest">Stay on
+                Current Screen</button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/ngeohash@0.6.3/build/ngeohash.min.js"></script>
+    <script src="/static/js/zkp.js"></script>
+    <script>
+        const ROLES = { STUDENT: 'STUDENT', FACULTY: 'FACULTY', ADMIN: 'ADMIN' };
+        let currentRole = new URLSearchParams(window.location.search).get('role') || 'STUDENT';
+        let currentGeohash = "";
+        let identity = null;
+        let html5QrScanner = null;
+        let watchId = null;
+        let isSimulated = false;
+        let isAutomatedScan = false;
+
+        window.onload = () => {
+            const params = new URLSearchParams(window.location.search);
+            const doorIdFromUrl = params.get('door');
+
+            document.getElementById('role-label').innerText = currentRole;
+
+            if (doorIdFromUrl) {
+                // MOBILE MODE: Zero-touch logic
+                autoUnlockFlow(doorIdFromUrl, params);
+            } else {
+                // PC/GATEWAY MODE: Normal login view
+                initView();
+                if (currentRole !== ROLES.ADMIN) {
+                    initAutoLocation();
+                }
+            }
+        };
+
+        async function autoUnlockFlow(doorId, params) {
+            isAutomatedScan = true;
+
+            if (params.get('action') === 'lookup') {
+                identity = {
+                    role: 'STUDENT',
+                    section: params.get('section')
+                };
+                if (identity.section) {
+                    showProc(true, "Fetching Room Assignment...");
+                    checkSectionAssignment();
+                } else {
+                    initView();
+                }
+                return;
+            }
+
+            // 1. Extract identity from URL
+            identity = {
+                role: params.get('role').toUpperCase(),
+                section: params.get('section'),
+                faculty_id: params.get('faculty_id'),
+                pin: params.get('pin')
+            };
+
+            // 2. Clear UI, show process
+            showProc(true, "Verifying Scan...");
+            document.getElementById('login-view').classList.add('hidden');
+
+            // 3. Initialize Location (auto-simulates if blocked)
+            initAutoLocation();
+
+            // 4. Setup secret
+            try {
+                const res = await axios.get(`/mobile/setup?role=${identity.role}`);
+                identity.secret = res.data.secret;
+
+                // 5. Short wait for location then trigger logic
+                let attempts = 0;
+                const checkLoc = setInterval(() => {
+                    attempts++;
+                    if (currentGeohash || attempts > 10) {
+                        clearInterval(checkLoc);
+                        triggerUnlock(doorId);
+                    }
+                }, 500);
+            } catch (e) {
+                showError("Zero-Touch Setup Failed: " + e.message);
+            }
+        }
+
+        function initView() {
+            showView('login-view');
+            if (currentRole === ROLES.ADMIN) {
+                document.getElementById('password-field').classList.remove('hidden');
+                document.getElementById('login-title').innerText = "ADMIN LOGIN";
+                document.getElementById('login-desc').innerText = "Enter password for central access control.";
+            } else if (currentRole === ROLES.FACULTY) {
+                document.getElementById('faculty-fields').classList.remove('hidden');
+                document.getElementById('pin-field').classList.remove('hidden');
+                document.getElementById('section-field').classList.remove('hidden');
+                document.getElementById('login-title').innerText = "FACULTY AUTH";
+                document.getElementById('login-desc').innerText = "Enter ID, PIN and select section.";
+            } else {
+                document.getElementById('section-field').classList.remove('hidden');
+                document.getElementById('login-title').innerText = "STUDENT ACCESS";
+                document.getElementById('login-desc').innerText = "Select your section and ensure GPS is active.";
+            }
+        }
+
+        function initAutoLocation() {
+            if (!navigator.geolocation) {
+                showError("Geolocation is not supported by this browser.");
+                return;
+            }
+
+            // High accuracy is required for 5m proximity
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            };
+
+            watchId = navigator.geolocation.watchPosition(
+                (pos) => {
+                    if (isSimulated) return;
+                    // Encode to 10 chars, but we only use 9 for 5m check
+                    currentGeohash = ngeohash.encode(pos.coords.latitude, pos.coords.longitude, 10);
+                    document.getElementById('loc-indicator').classList.replace('bg-red-500', 'bg-green-500');
+                    document.getElementById('loc-indicator').classList.add('animate-pulse');
+                    console.log("GPS Lock:", currentGeohash);
+                },
+                (err) => {
+                    if (isSimulated) return;
+                    console.warn("GPS ERROR:", err);
+                    document.getElementById('loc-indicator').classList.replace('bg-green-500', 'bg-red-500');
+
+                    if (err.code === 1) {
+                        // AUTO-SIMULATION FOR DEMO: If blocked, just use simulated location automatically
+                        console.log("GPS Blocked - Auto-Simulating for Demo Flow");
+                        simulateLocation();
+                        return;
+                    }
+
+                    let msg = "GPS Error. Please ensure location is enabled.";
+                    showError(msg);
+                },
+                options
+            );
+
+            // Add Simulation button for testing (Prominent for Demo)
+            const header = document.querySelector('header');
+            const simBtn = document.createElement('button');
+            simBtn.id = "header-sim-btn";
+            simBtn.className = "text-[10px] bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)] text-white px-3 py-1.5 rounded-full ml-2 border border-blue-400 font-bold cyber-font uppercase animate-pulse";
+            simBtn.innerText = "SIMULATE AT DOOR";
+            simBtn.onclick = simulateLocation;
+            header.appendChild(simBtn);
+        }
+
+        function simulateLocation() {
+            isSimulated = true;
+            currentGeohash = "t1q7hk9vj"; // Tiered Classroom Location
+
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+
+            // Explicitly force class replacement for indicator
+            const indicator = document.getElementById('loc-indicator');
+            indicator.className = "w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_10px_#3b82f6]";
+
+            const simBtn = document.getElementById('header-sim-btn');
+            if (simBtn) {
+                simBtn.classList.remove('bg-blue-500', 'animate-pulse');
+                simBtn.classList.add('bg-green-600', 'border-green-400');
+                simBtn.innerText = "AT DOOR (SIM)";
+            }
+
+            // Ensure error modal is closed
+            document.getElementById('error-modal').classList.add('hidden');
+            console.log("Location Simulated: t1q7hk9vj");
+            // No alert to keep flow smooth
+        }
+
+        function handleLogin() {
+            const password = document.getElementById('admin-pass')?.value;
+            const pin = document.getElementById('faculty-pin').value;
+            const section = document.getElementById('user-section').value;
+            const facId = document.getElementById('faculty-id')?.value;
+
+            if (currentRole === ROLES.FACULTY && (!facId || !pin || !section)) {
+                showError("Please fill in ID, PIN and Section."); return;
+            }
+            if (currentRole === ROLES.STUDENT && !section) {
+                showError("Please select your section."); return;
+            }
+
+            // Identity binding (ensure uppercase)
+            identity = {
+                role: currentRole.toUpperCase(),
+                password: password,
+                pin: pin,
+                section: section,
+                faculty_id: facId
+            };
+
+            showProc(true, "Synchronizing Identity...");
+            // Ensure location is initialized as soon as identity is binding
+            initAutoLocation();
+
+            axios.get(`/mobile/setup?role=${currentRole}`).then(res => {
+                identity.secret = res.data.secret;
+                showProc(false);
+                if (currentRole === ROLES.ADMIN) {
+                    showView('admin-view');
+                    loadRoomQRs('admin-qr-list', true);
+                } else if (currentRole === ROLES.STUDENT) {
+                    showView('scanner-view');
+                    document.getElementById('student-status-section').classList.remove('hidden');
+                    // Hide classroom QR title for students initially
+                    document.getElementById('qr-list-title').classList.add('hidden');
+                    // AUTO-CHECK
+                    checkSectionAssignment();
+                } else {
+                    showView('scanner-view');
+                    // Scanner is not started by default anymore, only when toggled
+                    loadRoomQRs('sim-qr-list', false, identity);
+                }
+            }).catch(e => {
+                showProc(false);
+                showError("Identity Setup Failed: " + e.message);
+            });
+        }
+
+        function toggleQRDisplay() {
+            const reader = document.getElementById('reader-container');
+            const btn = document.getElementById('qr-toggle-btn');
+            const isHidden = reader.classList.contains('hidden');
+
+            if (isHidden) {
+                reader.classList.remove('hidden');
+                btn.innerText = "Close Physical Scanner";
+                startScanner();
+            } else {
+                reader.classList.add('hidden');
+                btn.innerText = "Open Physical Scanner";
+                if (html5QrScanner) html5QrScanner.stop();
+            }
+        }
+
+        function startScanner() {
+            html5QrScanner = new Html5Qrcode("reader", { verbose: false });
+            const config = { fps: 15, qrbox: { width: 250, height: 250 } };
+
+            html5QrScanner.start({ facingMode: "environment" }, config, (decodedText) => {
+                let doorId = decodedText;
+                if (decodedText.includes('?door=')) {
+                    doorId = new URL(decodedText).searchParams.get('door');
+                } else if (decodedText.includes('/s/')) {
+                    doorId = decodedText.split('/s/')[1];
+                }
+
+                if (doorId) {
+                    html5QrScanner.stop().then(() => {
+                        triggerUnlock(doorId);
+                    }).catch(err => {
+                        console.error("Scanner Stop Error:", err);
+                        triggerUnlock(doorId);
+                    });
+                }
+            });
+        }
+
+        async function triggerUnlock(doorId) {
+            // LOCATION CHECK: Strict enforcement for Faculty/Student
+            if (currentRole !== ROLES.ADMIN) {
+                if (!currentGeohash) {
+                    showError("Access Denied: GPS location must be ON to unlock the door.");
+                    // No auto-restart of scanner here, user needs to re-toggle if they want to use physical scanner again
+                    return;
+                }
+            }
+
+            if (currentRole !== ROLES.ADMIN) {
+                showProc(true, "GENERATING ZK-LOCATION PROOF...");
+                try {
+                    const prover = new SchnorrProverJS(identity.secret);
+                    const proof = await prover.generateProof(currentGeohash || "0000000000");
+
+                    const payload = {
+                        door_id: doorId,
+                        role: identity.role,
+                        proof: proof,
+                        geohash: currentGeohash || "0000000000",
+                        password: identity.password,
+                        pin: identity.pin,
+                        section: identity.section,
+                        faculty_id: identity.faculty_id
+                    };
+
+                    const res = await axios.post('/api/verify', payload);
+                    showProc(false);
+                    document.getElementById('success-msg').innerText = res.data.message;
+
+                    if (isAutomatedScan) {
+                        const btn = document.getElementById('success-btn');
+                        btn.innerText = "ACCESS GRANTED - YOU MAY CLOSE THIS TAB";
+                        btn.onclick = () => { alert("Success! You can now safely close this tab."); };
+                    }
+
+                    document.getElementById('success-modal').classList.replace('hidden', 'flex');
+                } catch (e) {
+                    showProc(false);
+                    const msg = e.response?.data?.message || e.message;
+                    showError(msg);
+                    if (msg.toLowerCase().includes("location limit") || msg.toLowerCase().includes("too far")) {
+                        document.getElementById('error-msg').innerText = "ACCESS DENIED DUE TO LOCATION LIMIT\n(You must be within 5 meters)";
+                    }
+                    // No auto-restart of scanner here, user needs to re-toggle if they want to use physical scanner again
+                }
+            } else {
+                // ADMIN: Direct Unlock without ZKP
+                showProc(true, "REMOTE UNLOCKING...");
+                try {
+                    const payload = {
+                        door_id: doorId,
+                        role: identity.role,
+                        proof: { public_key: "0", commitment: "0", response: "0", geohash: "0" }, // Dummy proof for types
+                        geohash: "0000000000",
+                        password: identity.password
+                    };
+                    const res = await axios.post('/api/verify', payload);
+                    showProc(false);
+                    document.getElementById('success-msg').innerText = res.data.message;
+                    document.getElementById('success-modal').classList.replace('hidden', 'flex');
+                } catch (e) {
+                    showProc(false);
+                    showError(e.response?.data?.message || e.message);
+                }
+            }
+        }
+
+        function loadRoomQRs(targetId, isAdminOverride, ident) {
+            let url = '/api/room_qrs?_t=' + Date.now();
+            if (ident) {
+                if (ident.role) url += `&role=${ident.role}`;
+                if (ident.section) url += `&section=${ident.section}`;
+                if (ident.faculty_id) url += `&faculty_id=${ident.faculty_id}`;
+                if (ident.pin) url += `&pin=${ident.pin}`;
+            }
+
+            axios.get(url).then(res => {
+                const container = document.getElementById(targetId);
+                container.innerHTML = '';
+                res.data.forEach(room => {
+                    const div = document.createElement('div');
+                    div.className = "glass p-4 rounded-2xl text-center space-y-4";
+
+                    let buttonHtml = '';
+                    let qrHtml = '';
+
+                    if (isAdminOverride) {
+                        buttonHtml = `<button onclick="triggerUnlock('${room.id}')" class="w-full bg-red-500/20 text-red-500 p-2 rounded-xl uppercase font-bold text-[10px] tracking-widest border border-red-500/30 hover:bg-red-500 hover:text-white transition-all">Direct Remote Unlock</button>`;
+                    } else {
+                        qrHtml = `<img src="${room.qr_data}" class="mx-auto rounded-lg border border-gray-800 w-48 h-48">`;
+                    }
+
+                    div.innerHTML = `
+                        <h3 class="font-bold text-blue-400 cyber-font text-xs uppercase">${room.name}</h3>
+                        ${qrHtml}
+                        ${buttonHtml}
+                    `;
+                    container.appendChild(div);
+                });
+            }).catch(err => {
+                console.error("Failed to load QR codes:", err);
+            });
+        }
+
+        function fetchHistory() {
+            showView('logs-view');
+            axios.get('/history').then(res => {
+                const list = document.getElementById('logs-list');
+                list.innerHTML = '';
+                res.data.reverse().forEach(log => {
+                    const el = document.createElement('div');
+                    const isDenied = log.status.includes('DENIED');
+                    const statusColor = isDenied ? 'text-red-500' : 'text-green-500';
+                    const borderColor = isDenied ? 'border-red-500/20' : 'border-green-500/20';
+
+                    let userLabel = log.role;
+                    if (log.role === 'FACULTY' && log.faculty_id) {
+                        userLabel = `<span class="text-blue-400 font-bold">Faculty ${log.faculty_id}</span>`;
+                    } else {
+                        userLabel = `<span class="text-blue-400 font-bold">${log.role}</span>`;
+                    }
+
+                    el.className = `glass p-4 rounded-xl text-xs flex justify-between border ${borderColor}`;
+                    el.innerHTML = `
+                        <div>
+                            ${userLabel}
+                            <span class="text-gray-500 ml-2">Section ${log.section}</span>
+                            <p class="mt-1 text-white font-semibold">${log.door_name}</p>
+                        </div>
+                        <div class="text-right flex flex-col justify-between items-end">
+                            <p class="text-gray-600 text-[10px]">${log.timestamp}</p>
+                            <span class="${statusColor} font-bold uppercase tracking-tighter text-[9px] bg-${isDenied ? 'red' : 'green'}-500/10 px-2 py-0.5 rounded border border-${isDenied ? 'red' : 'green'}-500/20">${log.status}</span>
+                        </div>
+                    `;
+                    list.appendChild(el);
+                });
+            });
+        }
+
+        function showView(id) {
+            ['login-view', 'admin-view', 'scanner-view', 'logs-view'].forEach(v => document.getElementById(v).classList.add('hidden'));
+            document.getElementById(id).classList.remove('hidden');
+
+            if (id === 'scanner-view') {
+                document.getElementById('simulation-qrs').classList.remove('hidden');
+                document.getElementById('reader-container').classList.add('hidden');
+                const btn = document.getElementById('qr-toggle-btn');
+                if (btn) btn.innerText = "Open Physical Scanner";
+            }
+        }
+
+        function showProc(s, m) {
+            document.getElementById('proc-msg').innerText = m;
+            document.getElementById('proc-overlay').classList.toggle('hidden', !s);
+            document.getElementById('proc-overlay').classList.toggle('flex', s);
+        }
+
+        function showError(m) {
+            document.getElementById('error-msg').innerText = m;
+            document.getElementById('error-modal').classList.replace('hidden', 'flex');
+        }
+
+        function hideError() {
+            document.getElementById('error-modal').classList.replace('flex', 'hidden');
+        }
+
+        function backToLogin() {
+            hideError();
+            if (currentRole === ROLES.ADMIN) {
+                showView('admin-view');
+            } else {
+                showView('login-view');
+            }
+        }
+
+        async function checkSectionAssignment() {
+            if (!identity || !identity.section) return;
+
+            const msgEl = document.getElementById('student-status-msg');
+            const cardEl = document.getElementById('student-status-card');
+
+            if (msgEl) msgEl.innerText = "Checking...";
+
+            try {
+                const res = await axios.get(`/api/check_assignment?section=${identity.section}`);
+
+                if (res.data.assigned) {
+                    // Update Page Content
+                    if (msgEl) {
+                        msgEl.innerHTML = `
+                            <p class="text-2xl font-bold text-green-400 mb-1">${res.data.room_name}</p>
+                            <p class="text-xs text-gray-500 uppercase">Faculty: ${res.data.faculty_name}</p>
+                        `;
+                        cardEl.classList.replace('border-blue-500/20', 'border-green-500/30');
+                    }
+
+                    // Show classroom QR title now that we know there is one
+                    document.getElementById('qr-list-title').classList.remove('hidden');
+                    loadRoomQRs('sim-qr-list', false, identity);
+
+                    // Show success modal too
+                    document.getElementById('success-msg').innerHTML =
+                        `<div class="text-center">
+                            <p class="text-lg mb-2">Section: <span class="text-blue-400 font-bold">${identity.section}</span></p>
+                            <p class="text-2xl font-bold text-green-400">Assigned To:</p>
+                            <p class="text-3xl font-bold mt-2">${res.data.room_name}</p>
+                            <p class="text-sm text-gray-500 mt-4 uppercase tracking-widest">Faculty In Charge:</p>
+                            <p class="text-lg font-bold text-blue-300">${res.data.faculty_name}</p>
+                        </div>`;
+                    document.getElementById('success-btn').innerText = "OK, GOT IT";
+                    document.getElementById('success-modal').classList.replace('hidden', 'flex');
+                } else {
+                    if (msgEl) {
+                        msgEl.innerText = res.data.message;
+                        msgEl.className = "text-lg font-bold text-red-500 animate-pulse";
+                        cardEl.classList.replace('border-green-500/30', 'border-red-500/20');
+                    }
+                    // Keep QR list hidden
+                    document.getElementById('qr-list-title').classList.add('hidden');
+                    document.getElementById('sim-qr-list').innerHTML = '';
+                }
+            } catch (e) {
+                if (msgEl) msgEl.innerText = "Check failed. Try again.";
+            } finally {
+                showProc(false);
+            }
+        }
+    </script>
+
+</body>
+
+</html>

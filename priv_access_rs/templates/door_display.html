@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Door Access - {{ door.name }}</title>
+    <!-- Tailwind for quick styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- QRCode.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body {
+            background-color: #0d0d12;
+            color: #e0e0e0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .neon-border {
+            box-shadow: 0 0 15px #3b82f6, 0 0 30px #2563eb;
+        }
+
+        #qrcode {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+        }
+
+        .status {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            background-color: #1a1a2e;
+        }
+
+        .status.success {
+            color: #10b981;
+        }
+
+        .status.error {
+            color: #ef4444;
+        }
+    </style>
+</head>
+
+<body class="h-screen flex flex-col items-center justify-center p-4">
+    <div class="flex flex-col items-center mb-10">
+        <div class="flex items-center space-x-4 mb-4">
+            <img src="/static/img/logo.jpg" alt="PrivAccess Logo"
+                class="w-16 h-16 rounded-xl shadow-lg border border-blue-500/30">
+            <h1 class="text-5xl font-bold tracking-tight text-white cyber-font">
+                {{ door.name }}
+            </h1>
+        </div>
+        <div class="h-1 w-32 bg-gradient-to-r from-transparent via-blue-500 to-transparent mb-4"></div>
+        <p class="text-blue-400/80 uppercase tracking-[0.2em] text-sm font-medium">Secured Access Point • Scan to Unlock
+        </p>
+    </div>
+
+    <div class="bg-white p-8 rounded-2xl neon-border shadow-2xl">
+        <div id="qrcode-container" class="flex flex-col items-center">
+            <img src="{{ qr_data_url }}" alt="Access QR Code" class="w-80 h-80">
+        </div>
+        <div id="status" class="status text-center font-bold text-lg mt-4">● INITIALIZING</div>
+    </div>
+
+    <script>
+        const doorId = "{{ door_id }}";
+
+        function initStatusListener() {
+            const eventSource = new EventSource(`/door/${doorId}/status`);
+            const statusDiv = document.getElementById("status");
+            const qrcodeBox = document.querySelector(".bg-white");
+
+            eventSource.onmessage = (event) => {
+                const status = event.data;
+                console.log("Status update:", status);
+
+                if (status === "connected") {
+                    statusDiv.textContent = "✓ DEVICE CONNECTED";
+                    statusDiv.className = "status text-blue-400 animate-pulse";
+                } else if (status === "verified") {
+                    statusDiv.textContent = "✓ LOCATION VERIFIED";
+                    statusDiv.className = "status text-yellow-400";
+                } else if (status === "unlocked") {
+                    statusDiv.innerHTML = "🔓 ACCESS GRANTED<br><span class='text-sm'>Door Unlocked</span>";
+                    statusDiv.className = "status text-green-500 text-2xl animate-bounce";
+                    qrcodeBox.classList.remove('neon-border');
+                    qrcodeBox.classList.add('shadow-[0_0_60px_rgba(16,185,129,0.6)]', 'border-4', 'border-green-500');
+
+                    setTimeout(() => location.reload(), 8000);
+                }
+            };
+
+            eventSource.onerror = () => {
+                eventSource.close();
+                setTimeout(initStatusListener, 2000);
+            };
+        }
+
+        window.onload = initStatusListener;
+    </script>
+
+</body>
+
+</html>

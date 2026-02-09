@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PrivAccess Gateway</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #050505;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+
+        .cyber-font {
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .glass:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: #3b82f6;
+            transform: translateY(-5px);
+        }
+
+        .bg-mesh {
+            background: radial-gradient(circle at 50% 50%, #1e3a8a 0%, #000000 70%);
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+        }
+    </style>
+</head>
+
+<body class="flex flex-col items-center justify-center p-6">
+    <div class="bg-mesh"></div>
+
+    <div class="text-center mb-12">
+        <img src="/static/img/logo.jpg" alt="PrivAccess Logo" style="width: 550px; height: 200px;"
+            class="mx-auto mb-6 rounded-2xl border-2 border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.5)] object-cover">
+        <p class="text-gray-400 tracking-[0.2em] uppercase text-sm">Security Framework</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-5xl">
+        <!-- Student Card -->
+        <a href="/mobile/scan?role=STUDENT" class="glass p-8 rounded-3xl text-center group">
+            <div
+                class="w-16 h-16 bg-blue-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:bg-blue-500/40">
+                <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5z">
+                    </path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z">
+                    </path>
+                </svg>
+            </div>
+            <h2 class="text-2xl font-bold cyber-font mb-2">STUDENT</h2>
+            <p class="text-gray-500 text-sm">Verify location and section to access classrooms.</p>
+        </a>
+
+        <!-- Faculty Card -->
+        <a href="/mobile/scan?role=FACULTY" class="glass p-8 rounded-3xl text-center group border-blue-500/30">
+            <div
+                class="w-16 h-16 bg-purple-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:bg-purple-500/40">
+                <svg class="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4">
+                    </path>
+                </svg>
+            </div>
+            <h2 class="text-2xl font-bold cyber-font mb-2">FACULTY</h2>
+            <p class="text-gray-500 text-sm">Authorized access with security PIN and geofence.</p>
+        </a>
+
+        <!-- Admin Card -->
+        <a href="/mobile/scan?role=ADMIN" class="glass p-8 rounded-3xl text-center group">
+            <div
+                class="w-16 h-16 bg-red-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:bg-red-500/40">
+                <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z">
+                    </path>
+                </svg>
+            </div>
+            <h2 class="text-2xl font-bold cyber-font mb-2 text-red-400">ADMIN</h2>
+            <p class="text-gray-500 text-sm">Full control, history tracking, and remote unlock.</p>
+        </a>
+    </div>
+
+
+</body>
+
+</html>
