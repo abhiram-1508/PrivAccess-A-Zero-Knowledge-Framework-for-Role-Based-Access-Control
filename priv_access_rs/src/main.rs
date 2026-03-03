@@ -29,7 +29,7 @@ struct ZkProofPayload {
     allowed_prefix: Option<String>,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 struct AccessHistory {
     role: String,
     door_name: String,
@@ -41,8 +41,24 @@ struct AccessHistory {
 }
 
 static ACCESS_LOGS: Lazy<std::sync::Mutex<Vec<AccessHistory>>> = Lazy::new(|| {
-    std::sync::Mutex::new(Vec::new())
+    let logs = load_history();
+    std::sync::Mutex::new(logs)
 });
+
+fn load_history() -> Vec<AccessHistory> {
+    if let Ok(content) = fs::read_to_string("access_history.json") {
+        if let Ok(logs) = serde_json::from_str(&content) {
+            return logs;
+        }
+    }
+    Vec::new()
+}
+
+fn save_history(logs: &Vec<AccessHistory>) {
+    if let Ok(content) = serde_json::to_string_pretty(logs) {
+        let _ = fs::write("access_history.json", content);
+    }
+}
 
 // Section to Room mapping: stores which section is assigned to which room and by which faculty
 // Map: Section -> (RoomID, FacultyName)
@@ -254,6 +270,22 @@ async fn api_check_assignment(Query(params): Query<CheckAssignmentParams>) -> im
     
     if let Some((room_id, faculty_name)) = map.get(&params.section) {
         if let Some(door) = DOORS.get(room_id) {
+            let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+            let history = AccessHistory {
+                role: "STUDENT".to_string(),
+                door_name: door.name.clone(),
+                section: params.section.clone(),
+                timestamp,
+                status: "ASSIGNMENT FETCHED".to_string(),
+                faculty_name: Some(faculty_name.clone()),
+                faculty_id: None,
+            };
+            {
+                let mut logs = ACCESS_LOGS.lock().unwrap();
+                logs.push(history);
+                save_history(&logs);
+            }
+
             return Json(json!({
                 "assigned": true,
                 "room_name": door.name,
@@ -263,6 +295,23 @@ async fn api_check_assignment(Query(params): Query<CheckAssignmentParams>) -> im
         }
     }
     
+    // Log "No Room Allotted" check
+    let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let history = AccessHistory {
+        role: "STUDENT".to_string(),
+        door_name: "Room lookup".to_string(),
+        section: params.section.clone(),
+        timestamp,
+        status: "DENIED: No room allotted".to_string(),
+        faculty_name: None,
+        faculty_id: None,
+    };
+    {
+        let mut logs = ACCESS_LOGS.lock().unwrap();
+        logs.push(history);
+        save_history(&logs);
+    }
+
     Json(json!({
         "assigned": false,
         "message": "No room is being alloted for ur section"
@@ -661,6 +710,7 @@ async fn api_verify(Json(payload): Json<VerifyPayload>) -> impl IntoResponse {
     {
         let mut logs = ACCESS_LOGS.lock().unwrap();
         logs.push(history);
+        save_history(&logs);
     }
 
     let _ = DOOR_STATUS_TX.send((door_id.to_string(), "unlocked".to_string()));
@@ -685,4 +735,5 @@ fn log_denied(payload: &VerifyPayload, door: &Door, reason: &str) {
     };
     let mut logs = ACCESS_LOGS.lock().unwrap();
     logs.push(history);
+    save_history(&logs);
 }

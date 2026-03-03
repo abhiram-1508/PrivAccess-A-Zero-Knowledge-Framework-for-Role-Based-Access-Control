@@ -1,0 +1,137 @@
+[
+  {
+    "role": "FACULTY",
+    "door_name": "Tiered Classroom",
+    "section": "F",
+    "timestamp": "2026-03-03 12:19:33",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": "Fac2"
+  },
+  {
+    "role": "FACULTY",
+    "door_name": "Normal Classroom",
+    "section": "G",
+    "timestamp": "2026-03-03 12:20:02",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": "Fac1"
+  },
+  {
+    "role": "ADMIN",
+    "door_name": "Tiered Classroom",
+    "section": "N/A",
+    "timestamp": "2026-03-03 12:20:24",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "FACULTY",
+    "door_name": "Lab",
+    "section": "C",
+    "timestamp": "2026-03-03 12:22:28",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": "Fac3"
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "D",
+    "timestamp": "2026-03-03 12:25:01",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "D",
+    "timestamp": "2026-03-03 12:25:03",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "C",
+    "timestamp": "2026-03-03 12:31:40",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "C",
+    "timestamp": "2026-03-03 12:31:42",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "C",
+    "timestamp": "2026-03-03 12:31:42",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "B",
+    "timestamp": "2026-03-03 12:43:50",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "B",
+    "timestamp": "2026-03-03 12:43:52",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "B",
+    "timestamp": "2026-03-03 12:43:52",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "B",
+    "timestamp": "2026-03-03 12:43:52",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "D",
+    "timestamp": "2026-03-03 12:46:11",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "D",
+    "timestamp": "2026-03-03 12:46:13",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  }
+]
