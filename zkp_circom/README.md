@@ -34,3 +34,4 @@ snarkjs groth16 verify verification_key.json public.json proof.json
 - Use the output `proof.json` and `public.json` in your backend for access control.
 
 
+ 

@@ -44,3 +44,4 @@ async function runGeohashZKP(allowedPrefixStr = 't1q7hk') {
 // Usage: call runGeohashZKP() on a button click or page load
 
 // Sync update
+ 

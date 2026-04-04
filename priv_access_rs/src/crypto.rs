@@ -29,3 +29,4 @@ pub fn power_mod(base: &BigUint, exp: &BigUint, mod_val: &BigUint) -> BigUint {
 pub fn str_to_int(s: &str) -> BigUint {
     BigUint::from_bytes_be(s.as_bytes())
 }
+ 

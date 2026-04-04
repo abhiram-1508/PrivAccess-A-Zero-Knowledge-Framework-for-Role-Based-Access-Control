@@ -85,3 +85,4 @@ function requestAccess(roomId) {
 function closeModal() {
     document.getElementById('result-modal').classList.add('hidden');
 }
+ 

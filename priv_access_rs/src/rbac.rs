@@ -46,3 +46,4 @@ pub fn get_role_secret(role_name: &str) -> Option<BigUint> {
 pub fn get_role_permissions(role_name: &str) -> Option<Vec<&'static str>> {
     ROLE_PERMISSIONS.get(role_name).cloned()
 }
+ 

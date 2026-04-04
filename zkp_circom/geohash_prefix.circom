@@ -34,3 +34,4 @@ template GeoHashPrefixCheck(n) {
 }
 
 component main = GeoHashPrefixCheck(6); // 6-char prefix for ~1km accuracy
+ 

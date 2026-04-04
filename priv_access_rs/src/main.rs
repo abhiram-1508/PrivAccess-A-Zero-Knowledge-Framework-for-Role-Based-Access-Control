@@ -837,3 +837,4 @@ fn log_denied(payload: &VerifyPayload, door: &Door, reason: &str) {
     logs.push(history);
     save_history(&logs);
 }
+ 
