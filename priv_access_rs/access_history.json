@@ -133,5 +133,86 @@
     "status": "DENIED: No room allotted",
     "faculty_name": null,
     "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "B",
+    "timestamp": "2026-04-03 14:45:06",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "FACULTY",
+    "door_name": "Normal Classroom",
+    "section": "A",
+    "timestamp": "2026-04-04 08:21:59",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": "Fac4"
+  },
+  {
+    "role": "FACULTY",
+    "door_name": "Lab",
+    "section": "G",
+    "timestamp": "2026-04-04 08:22:31",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": "Fac3"
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "B",
+    "timestamp": "2026-04-04 08:22:47",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Normal Classroom",
+    "section": "A",
+    "timestamp": "2026-04-04 08:22:53",
+    "status": "ASSIGNMENT FETCHED",
+    "faculty_name": "Fac4",
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Lab",
+    "section": "G",
+    "timestamp": "2026-04-04 08:23:00",
+    "status": "ASSIGNMENT FETCHED",
+    "faculty_name": "Fac3",
+    "faculty_id": null
+  },
+  {
+    "role": "FACULTY",
+    "door_name": "Lab",
+    "section": "A",
+    "timestamp": "2026-04-04 09:07:30",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": "Fac1"
+  },
+  {
+    "role": "FACULTY",
+    "door_name": "Tiered Classroom",
+    "section": "A",
+    "timestamp": "2026-04-04 09:07:51",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": "Fac1"
+  },
+  {
+    "role": "FACULTY",
+    "door_name": "Tiered Classroom",
+    "section": "B",
+    "timestamp": "2026-04-04 09:17:17",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": "Fac1"
   }
 ]

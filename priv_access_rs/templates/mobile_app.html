@@ -8,6 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
 
     <style>
@@ -178,7 +179,7 @@
         <!-- Scanner View (Faculty/Student) -->
         <section id="scanner-view" class="hidden space-y-6">
             <div class="flex justify-between items-center">
-                <h2 class="text-2xl font-bold cyber-font text-blue-400">SCAN TO UNLOCK</h2>
+                <h2 class="text-2xl font-bold cyber-font text-blue-400">ACCESS PORTAL</h2>
                 <div class="flex space-x-2">
                     <button onclick="showView('login-view')"
                         class="text-[10px] bg-gray-800 text-gray-400 px-3 py-1 rounded-full border border-gray-700 uppercase hover:bg-gray-700 transition-all">←
@@ -209,7 +210,7 @@
             <!-- Room Security Codes Display (Primary focus) -->
             <div id="simulation-qrs" class="space-y-4 pt-4">
                 <p id="qr-list-title"
-                    class="text-[10px] text-blue-400 uppercase text-center tracking-[0.3em] font-bold">Room Access Codes
+                    class="text-[10px] text-blue-400 uppercase text-center tracking-[0.3em] font-bold">Room Access List
                 </p>
                 <div id="sim-qr-list" class="grid grid-cols-1 gap-4"></div>
             </div>
@@ -219,11 +220,20 @@
                 <p class="text-[10px] text-gray-500 uppercase text-center tracking-widest mb-4">Physical Scanner</p>
                 <div id="reader" class="glass overflow-hidden rounded-2xl"></div>
             </div>
+        </section>
 
-            <div class="p-4 glass rounded-xl text-center">
-                <p class="text-xs text-gray-500 uppercase tracking-widest mb-1">Status</p>
-                <p id="scanner-status" class="text-yellow-500 font-bold">READY TO SCAN</p>
+        <!-- Tap View -->
+        <section id="tap-view" class="hidden flex-col items-center justify-center p-8 text-center h-[60vh]">
+            <div class="mb-8">
+                <span class="inline-block p-4 bg-blue-500/10 rounded-full border border-blue-500/30 animate-pulse">
+                     <svg class="w-16 h-16 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path></svg>
+                </span>
             </div>
+            <h2 class="text-3xl font-bold cyber-font mb-2 text-white">ACCESS REQUEST</h2>
+            <p class="text-gray-400 mb-10 text-sm">QR Confirmed. You must confirm physical presence immediately before the security code expires (5s window).</p>
+            <button id="tap-to-unlock-btn" class="w-full py-6 bg-blue-600 hover:bg-blue-500 text-white rounded-3xl font-bold text-xl uppercase shadow-[0_0_30px_rgba(37,99,235,0.6)] border-2 border-blue-400 transition-all transform active:scale-95">
+                TAP TO UNLOCK
+            </button>
         </section>
 
         <!-- Logs View -->
@@ -292,6 +302,12 @@
         let watchId = null;
         let isSimulated = false;
         let isAutomatedScan = false;
+        
+        // Location Validation
+        let gpsValid = false;
+        let ipCity = null;
+        let ipRegion = null;
+        let ipCountry = null;
 
         window.onload = () => {
             const params = new URLSearchParams(window.location.search);
@@ -345,7 +361,13 @@
 
             // 4. Setup secret
             try {
-                const res = await axios.get(`/mobile/setup?role=${identity.role}`);
+                let setupUrl = `/mobile/setup?role=${identity.role}`;
+                if (identity.role === 'FACULTY') {
+                    setupUrl += `&faculty_id=${encodeURIComponent(identity.faculty_id || '')}&pin=${encodeURIComponent(identity.pin || '')}`;
+                } else if (identity.role === 'ADMIN') {
+                    setupUrl += `&password=${encodeURIComponent(identity.password || '')}`;
+                }
+                const res = await axios.get(setupUrl);
                 identity.secret = res.data.secret;
 
                 // 5. Short wait for location then trigger logic
@@ -382,6 +404,8 @@
         }
 
         function initAutoLocation() {
+            if (document.getElementById('header-sim-btn')) return; // Prevent multiple initializations
+
             if (!navigator.geolocation) {
                 showError("Geolocation is not supported by this browser.");
                 return;
@@ -394,9 +418,26 @@
                 maximumAge: 0
             };
 
+            // Fetch IP location data concurrently
+            if (!ipCountry) {
+                fetch('https://ipapi.co/json/')
+                    .then(res => res.json())
+                    .then(data => {
+                        ipCity = data.city;
+                        ipRegion = data.region;
+                        ipCountry = data.country_name;
+                        console.log("IP API Lock:", ipCity, ipRegion, ipCountry);
+                    })
+                    .catch(err => console.warn("IP API Error:", err));
+            }
+
             watchId = navigator.geolocation.watchPosition(
                 (pos) => {
                     if (isSimulated) return;
+                    
+                    // Mark GPS strictly valid if accuracy <= 50m
+                    gpsValid = (pos.coords.accuracy <= 50);
+                    
                     // Encode to 10 chars, but we only use 9 for 5m check
                     currentGeohash = ngeohash.encode(pos.coords.latitude, pos.coords.longitude, 10);
                     document.getElementById('loc-indicator').classList.replace('bg-red-500', 'bg-green-500');
@@ -434,6 +475,11 @@
         function simulateLocation() {
             isSimulated = true;
             currentGeohash = "t1q7hk9vj"; // Tiered Classroom Location
+            gpsValid = true; // explicitly simulate a successful GPS lock
+            if (!ipCountry) {
+                ipCountry = "India";
+                ipRegion = "Andhra Pradesh";
+            }
 
             if (watchId !== null) {
                 navigator.geolocation.clearWatch(watchId);
@@ -483,7 +529,14 @@
             // Ensure location is initialized as soon as identity is binding
             initAutoLocation();
 
-            axios.get(`/mobile/setup?role=${currentRole}`).then(res => {
+            let setupUrl = `/mobile/setup?role=${currentRole}`;
+            if (currentRole === ROLES.FACULTY) {
+                setupUrl += `&faculty_id=${encodeURIComponent(facId || '')}&pin=${encodeURIComponent(pin || '')}`;
+            } else if (currentRole === ROLES.ADMIN) {
+                setupUrl += `&password=${encodeURIComponent(password || '')}`;
+            }
+
+            axios.get(setupUrl).then(res => {
                 identity.secret = res.data.secret;
                 showProc(false);
                 if (currentRole === ROLES.ADMIN) {
@@ -498,60 +551,32 @@
                     checkSectionAssignment();
                 } else {
                     showView('scanner-view');
-                    // Scanner is not started by default anymore, only when toggled
                     loadRoomQRs('sim-qr-list', false, identity);
                 }
             }).catch(e => {
                 showProc(false);
-                showError("Identity Setup Failed: " + e.message);
+                showError("Identity Setup Failed: " + (e.response?.data?.message || e.message));
             });
         }
 
-        function toggleQRDisplay() {
-            const reader = document.getElementById('reader-container');
-            const btn = document.getElementById('qr-toggle-btn');
-            const isHidden = reader.classList.contains('hidden');
-
-            if (isHidden) {
-                reader.classList.remove('hidden');
-                btn.innerText = "Close Physical Scanner";
-                startScanner();
-            } else {
-                reader.classList.add('hidden');
-                btn.innerText = "Open Physical Scanner";
-                if (html5QrScanner) html5QrScanner.stop();
-            }
+        function showTapToUnlock(doorId, ts, nonce, floor) {
+            document.getElementById('scanner-view').classList.add('hidden');
+            document.getElementById('tap-view').classList.remove('hidden');
+            document.getElementById('tap-view').classList.add('flex');
+            
+            const btn = document.getElementById('tap-to-unlock-btn');
+            btn.onclick = () => {
+                document.getElementById('tap-view').classList.remove('flex');
+                document.getElementById('tap-view').classList.add('hidden');
+                triggerUnlock(doorId, ts, nonce, floor);
+            };
         }
 
-        function startScanner() {
-            html5QrScanner = new Html5Qrcode("reader", { verbose: false });
-            const config = { fps: 15, qrbox: { width: 250, height: 250 } };
-
-            html5QrScanner.start({ facingMode: "environment" }, config, (decodedText) => {
-                let doorId = decodedText;
-                if (decodedText.includes('?door=')) {
-                    doorId = new URL(decodedText).searchParams.get('door');
-                } else if (decodedText.includes('/s/')) {
-                    doorId = decodedText.split('/s/')[1];
-                }
-
-                if (doorId) {
-                    html5QrScanner.stop().then(() => {
-                        triggerUnlock(doorId);
-                    }).catch(err => {
-                        console.error("Scanner Stop Error:", err);
-                        triggerUnlock(doorId);
-                    });
-                }
-            });
-        }
-
-        async function triggerUnlock(doorId) {
-            // LOCATION CHECK: Strict enforcement for Faculty/Student
+        async function triggerUnlock(doorId, ts, nonce, floor) {
+            // LOCATION CHECK: Check if we have at least one valid location indicator before attempting verification
             if (currentRole !== ROLES.ADMIN) {
-                if (!currentGeohash) {
-                    showError("Access Denied: GPS location must be ON to unlock the door.");
-                    // No auto-restart of scanner here, user needs to re-toggle if they want to use physical scanner again
+                if (!currentGeohash && !ipCountry) {
+                    showError("Access Denied: Location must be verified (Enable GPS or ensure network connectivity).");
                     return;
                 }
             }
@@ -570,7 +595,14 @@
                         password: identity.password,
                         pin: identity.pin,
                         section: identity.section,
-                        faculty_id: identity.faculty_id
+                        faculty_id: identity.faculty_id,
+                        gps_valid: gpsValid,
+                        ip_city: ipCity,
+                        ip_region: ipRegion,
+                        ip_country: ipCountry,
+                        nonce: nonce,
+                        qr_timestamp: ts,
+                        floor: floor
                     };
 
                     const res = await axios.post('/api/verify', payload);
@@ -602,7 +634,10 @@
                         role: identity.role,
                         proof: { public_key: "0", commitment: "0", response: "0", geohash: "0" }, // Dummy proof for types
                         geohash: "0000000000",
-                        password: identity.password
+                        password: identity.password,
+                        nonce: null,
+                        qr_timestamp: null,
+                        floor: null
                     };
                     const res = await axios.post('/api/verify', payload);
                     showProc(false);
@@ -615,41 +650,122 @@
             }
         }
 
-        function loadRoomQRs(targetId, isAdminOverride, ident) {
-            let url = '/api/room_qrs?_t=' + Date.now();
-            if (ident) {
-                if (ident.role) url += `&role=${ident.role}`;
-                if (ident.section) url += `&section=${ident.section}`;
-                if (ident.faculty_id) url += `&faculty_id=${ident.faculty_id}`;
-                if (ident.pin) url += `&pin=${ident.pin}`;
+        let dynamicQrInterval = null;
+        let qrInstances = {};
+
+        function toggleQRDisplay() {
+            const reader = document.getElementById('reader-container');
+            const btn = document.getElementById('qr-toggle-btn');
+            const isHidden = reader.classList.contains('hidden');
+
+            if (isHidden) {
+                reader.classList.remove('hidden');
+                btn.innerText = "Close Physical Scanner";
+                startScanner();
+            } else {
+                reader.classList.add('hidden');
+                btn.innerText = "Open Physical Scanner";
+                if (html5QrScanner) html5QrScanner.stop();
             }
+        }
+
+        function startScanner() {
+            html5QrScanner = new Html5Qrcode("reader", { verbose: false });
+            const config = { fps: 15, qrbox: { width: 250, height: 250 } };
+
+            html5QrScanner.start({ facingMode: "environment" }, config, (decodedText) => {
+                let doorId = decodedText;
+                let ts = null;
+                let nonce = null;
+                let floor = null;
+
+                try {
+                    const url = new URL(decodedText);
+                    doorId = url.pathname.split('/').pop() || url.searchParams.get('door');
+                    ts = parseInt(url.searchParams.get('ts')) || 0;
+                    nonce = url.searchParams.get('nonce') || "";
+                    floor = parseInt(url.searchParams.get('floor')) || 1;
+                } catch(e) {
+                    if (decodedText.includes('?door=')) {
+                        doorId = new URL('http://d'+decodedText).searchParams.get('door');
+                    } else if (decodedText.includes('/s/')) {
+                        doorId = decodedText.split('/s/')[1].split('?')[0];
+                    }
+                }
+
+                if (doorId) {
+                    html5QrScanner.stop().then(() => {
+                        showTapToUnlock(doorId, ts, nonce, floor);
+                    }).catch(err => {
+                        console.error("Scanner Stop Error:", err);
+                        showTapToUnlock(doorId, ts, nonce, floor);
+                    });
+                }
+            });
+        }
+
+        function loadRoomQRs(targetId, isAdminOverride, ident) {
+            if (dynamicQrInterval) clearInterval(dynamicQrInterval);
+            qrInstances = {};
+
+            let url = '/api/room_qrs?_t=' + Date.now();
 
             axios.get(url).then(res => {
                 const container = document.getElementById(targetId);
                 container.innerHTML = '';
                 res.data.forEach(room => {
+                    if(room.type === 'lookup') return;
+                    
                     const div = document.createElement('div');
-                    div.className = "glass p-4 rounded-2xl text-center space-y-4";
+                    div.className = "glass p-4 rounded-2xl text-center space-y-4 flex flex-col items-center justify-center";
 
                     let buttonHtml = '';
                     let qrHtml = '';
 
                     if (isAdminOverride) {
-                        buttonHtml = `<button onclick="triggerUnlock('${room.id}')" class="w-full bg-red-500/20 text-red-500 p-2 rounded-xl uppercase font-bold text-[10px] tracking-widest border border-red-500/30 hover:bg-red-500 hover:text-white transition-all">Direct Remote Unlock</button>`;
+                        buttonHtml = `<button onclick="triggerUnlock('${room.id}', null, null, null)" class="w-full bg-red-500/20 text-red-500 p-2 rounded-xl uppercase font-bold text-[10px] tracking-widest border border-red-500/30 hover:bg-red-500 hover:text-white transition-all">Direct Remote Unlock</button>`;
                     } else {
-                        qrHtml = `<img src="${room.qr_data}" class="mx-auto rounded-lg border border-gray-800 w-48 h-48">`;
+                        qrHtml = `<div id="qr-${room.id}" class="bg-white p-2 rounded-xl cursor-pointer" onclick="simulateDynamicQR('${room.id}')" title="Click to Simulate Scan"></div>`;
                     }
 
                     div.innerHTML = `
-                        <h3 class="font-bold text-blue-400 cyber-font text-xs uppercase">${room.name}</h3>
+                        <h3 class="font-bold text-gray-300 cyber-font text-xs uppercase">${room.name}</h3>
                         ${qrHtml}
                         ${buttonHtml}
                     `;
                     container.appendChild(div);
                 });
+
+                if (!isAdminOverride) {
+                    // Start fetching dynamic payloads for all shown doors
+                    fetchDynamicQrs();
+                    dynamicQrInterval = setInterval(fetchDynamicQrs, 2500);
+                }
             }).catch(err => {
-                console.error("Failed to load QR codes:", err);
+                console.error("Failed to load QR layouts:", err);
             });
+        }
+
+        async function fetchDynamicQrs() {
+            try {
+                const res = await axios.get('/api/dynamic_qrs_all');
+                for (const [id, data] of Object.entries(res.data)) {
+                    const qrBox = document.getElementById(`qr-${id}`);
+                    if (qrBox) {
+                        qrBox.innerHTML = ""; // Clear old QR
+                        new QRCode(qrBox, {
+                            text: data.url,
+                            width: 150,
+                            height: 150,
+                            colorDark : "#000000",
+                            colorLight : "#ffffff",
+                            correctLevel : QRCode.CorrectLevel.L
+                        });
+                    }
+                }
+            } catch (err) { 
+                console.error("fetchDynamicQrs error:", err);
+            }
         }
 
         function fetchHistory() {
@@ -695,10 +811,10 @@
             document.getElementById(id).classList.remove('hidden');
 
             if (id === 'scanner-view') {
-                document.getElementById('simulation-qrs').classList.remove('hidden');
-                document.getElementById('reader-container').classList.add('hidden');
                 const btn = document.getElementById('qr-toggle-btn');
                 if (btn) btn.innerText = "Open Physical Scanner";
+            } else if (dynamicQrInterval) {
+                clearInterval(dynamicQrInterval);
             }
         }
 

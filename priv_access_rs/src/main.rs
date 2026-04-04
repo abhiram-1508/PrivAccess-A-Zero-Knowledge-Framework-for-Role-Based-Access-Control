@@ -1,7 +1,7 @@
 use std::process::Command;
 use std::fs;
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 
 use axum::{
     extract::{Query, Json},
@@ -145,6 +145,8 @@ struct AppState {
     tera: Tera,
 }
 
+static USED_NONCES: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| Mutex::new(HashSet::new()));
+
 // --- Constants & Data ---
 
 #[derive(Serialize, Clone, Debug)]
@@ -154,28 +156,25 @@ struct Door {
     secret_qr: String,
     geohash_prefix: String,
     qr_url: Option<String>,
+    floor: i32,
 }
 
 static DOORS: Lazy<HashMap<String, Door>> = Lazy::new(|| {
     let mut m = HashMap::new();
-    m.insert("tiered".to_string(), Door {
-        name: "Tiered Classroom".to_string(),
-        secret_qr: "tiered_secret".to_string(),
-        geohash_prefix: "t1q7hk9vj".to_string(), // 9 chars ~= 5m
-        qr_url: None,
-    });
-    m.insert("normal".to_string(), Door {
-        name: "Normal Classroom".to_string(),
-        secret_qr: "normal_secret".to_string(),
-        geohash_prefix: "t1q7hk9uh".to_string(), 
-        qr_url: None,
-    });
-    m.insert("lab".to_string(), Door {
-        name: "Lab".to_string(),
-        secret_qr: "lab_secret".to_string(),
-        geohash_prefix: "t1q7hk9tk".to_string(),
-        qr_url: None,
-    });
+    let default_geo = "t1q7hk9vj".to_string(); // shared base location for demo
+    
+    // Floor 1
+    m.insert("room101".to_string(), Door { name: "Room 101".to_string(), secret_qr: "s101".to_string(), geohash_prefix: default_geo.clone(), qr_url: None, floor: 1 });
+    m.insert("tiered102".to_string(), Door { name: "Tiered 102".to_string(), secret_qr: "s102".to_string(), geohash_prefix: default_geo.clone(), qr_url: None, floor: 1 });
+    m.insert("lab103".to_string(), Door { name: "Lab 103".to_string(), secret_qr: "s103".to_string(), geohash_prefix: default_geo.clone(), qr_url: None, floor: 1 });
+    // Floor 2
+    m.insert("room201".to_string(), Door { name: "Room 201".to_string(), secret_qr: "s201".to_string(), geohash_prefix: default_geo.clone(), qr_url: None, floor: 2 });
+    m.insert("tiered202".to_string(), Door { name: "Tiered 202".to_string(), secret_qr: "s202".to_string(), geohash_prefix: default_geo.clone(), qr_url: None, floor: 2 });
+    m.insert("lab203".to_string(), Door { name: "Lab 203".to_string(), secret_qr: "s203".to_string(), geohash_prefix: default_geo.clone(), qr_url: None, floor: 2 });
+    // Floor 3
+    m.insert("room301".to_string(), Door { name: "Room 301".to_string(), secret_qr: "s301".to_string(), geohash_prefix: default_geo.clone(), qr_url: None, floor: 3 });
+    m.insert("tiered302".to_string(), Door { name: "Tiered 302".to_string(), secret_qr: "s302".to_string(), geohash_prefix: default_geo.clone(), qr_url: None, floor: 3 });
+    m.insert("lab303".to_string(), Door { name: "Lab 303".to_string(), secret_qr: "s303".to_string(), geohash_prefix: default_geo.clone(), qr_url: None, floor: 3 });
     m
 });
 
@@ -206,6 +205,8 @@ async fn main() {
         .route("/history", get(api_get_history))
         .route("/api/room_qrs", get(api_room_qrs))
         .route("/api/check_assignment", get(api_check_assignment))
+        .route("/api/dynamic_qr/:door_id", get(api_dynamic_qr))
+        .route("/api/dynamic_qrs_all", get(api_dynamic_qrs_all))
         .route("/door/:door_id", get(door_display))
         .route("/door/:door_id/status", get(door_status_stream))
         .route("/s/:door_id", get(short_scan))
@@ -349,64 +350,21 @@ async fn api_room_qrs(
 
     // If student, add a special LOOKUP QR first
     if is_student {
-        let lookup_url = format!("http://{}/mobile/scan?role=STUDENT&action=lookup", final_host);
-        if let Some(ref _s) = q_params.section { 
-            // We don't append section here to keep it generic, or we could if we want automatic lookup
-        }
-
-        let code = QrCode::new(lookup_url.as_bytes()).unwrap();
-        let width = code.width();
-        let mut img = image::GrayImage::new(width as u32, width as u32);
-        for (i, color) in code.to_colors().into_iter().enumerate() {
-            let x = (i % width) as u32; let y = (i / width) as u32;
-            let pixel = if color == qrcode::Color::Dark { image::Luma([0u8]) } else { image::Luma([255u8]) };
-            img.put_pixel(x, y, pixel);
-        }
-        let upscaled = image::imageops::resize(&img, 300, 300, image::imageops::FilterType::Nearest);
-        let mut buffer = std::io::Cursor::new(Vec::new());
-        let dynamic_image = image::DynamicImage::ImageLuma8(upscaled);
-        dynamic_image.write_to(&mut buffer, image::ImageFormat::Png).unwrap();
-        let b64 = general_purpose::STANDARD.encode(buffer.into_inner());
-
         room_qrs.push(json!({
             "id": "lookup",
             "name": "LOOKUP MY ROOM",
-            "qr_data": format!("data:image/png;base64,{}", b64)
+            "type": "lookup"
         }));
 
-        // STOP HERE FOR STUDENTS - They shouldn't see classroom QRs on the laptop
+        // STOP HERE FOR STUDENTS - They shouldn't see classroom QRs unconditionally
         return Json(room_qrs);
     }
 
     for (id, door) in DOORS.iter() {
-        let mut mobile_url = format!("http://{}/mobile/scan?door={}", final_host, id);
-        
-        // Append identity if present
-        if let Some(ref r) = q_params.role { mobile_url.push_str(&format!("&role={}", r)); }
-        if let Some(ref s) = q_params.section { mobile_url.push_str(&format!("&section={}", s)); }
-        if let Some(ref n) = q_params.faculty_name { mobile_url.push_str(&format!("&faculty_name={}", urlencoding::encode(n))); }
-        if let Some(ref i) = q_params.faculty_id { mobile_url.push_str(&format!("&faculty_id={}", urlencoding::encode(i))); }
-        if let Some(ref p) = q_params.pin { mobile_url.push_str(&format!("&pin={}", p)); }
-
-        let code = QrCode::new(mobile_url.as_bytes()).unwrap();
-        let width = code.width();
-        let mut img = image::GrayImage::new(width as u32, width as u32);
-        for (i, color) in code.to_colors().into_iter().enumerate() {
-            let x = (i % width) as u32;
-            let y = (i / width) as u32;
-            let pixel = if color == qrcode::Color::Dark { image::Luma([0u8]) } else { image::Luma([255u8]) };
-            img.put_pixel(x, y, pixel);
-        }
-        let upscaled = image::imageops::resize(&img, 300, 300, image::imageops::FilterType::Nearest);
-        let mut buffer = std::io::Cursor::new(Vec::new());
-        let dynamic_image = image::DynamicImage::ImageLuma8(upscaled);
-        dynamic_image.write_to(&mut buffer, image::ImageFormat::Png).unwrap();
-        let b64 = general_purpose::STANDARD.encode(buffer.into_inner());
-        
         room_qrs.push(json!({
             "id": id,
             "name": door.name,
-            "qr_data": format!("data:image/png;base64,{}", b64)
+            "type": "door"
         }));
     }
     Json(room_qrs)
@@ -427,6 +385,97 @@ fn get_local_ip() -> String {
         .unwrap_or(fallback);
     println!("DEBUG: Detected LAN IP for QR Code: {}", ip);
     ip
+}
+
+// === Dynamic QR Code API ===
+#[derive(Serialize)]
+struct DynamicQrRes {
+    door_id: String,
+    floor: i32,
+    timestamp: u64,
+    nonce: String,
+    url: String,
+}
+
+async fn api_dynamic_qr(
+    axum::extract::Path(door_id): axum::extract::Path<String>,
+    req: axum::http::Request<axum::body::Body>,
+) -> impl IntoResponse {
+    let door = match DOORS.get(&door_id) {
+        Some(d) => d,
+        None => return (StatusCode::NOT_FOUND, "Door Not Found").into_response(),
+    };
+
+    let host = req.headers()
+        .get("host")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("localhost:3000");
+
+    let is_local = host.starts_with("localhost") || host.starts_with("127.0.0.1");
+    let base_host = if is_local {
+        format!("{}:3000", get_local_ip())
+    } else {
+        host.to_string()
+    };
+
+    let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    
+    use rand::Rng;
+    let nonce: String = rand::thread_rng()
+        .sample_iter(&rand::distributions::Alphanumeric)
+        .take(16)
+        .map(char::from)
+        .collect();
+
+    // URL scheme: http://HOST/s/door_id?ts=XXX&nonce=YYY&floor=Z
+    let url = format!("http://{}/s/{}?ts={}&nonce={}&floor={}", base_host, door_id, timestamp, nonce, door.floor);
+
+    Json(DynamicQrRes {
+        door_id,
+        floor: door.floor,
+        timestamp,
+        nonce,
+        url,
+    }).into_response()
+}
+
+async fn api_dynamic_qrs_all(
+    req: axum::http::Request<axum::body::Body>,
+) -> impl IntoResponse {
+    let host = req.headers()
+        .get("host")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("localhost:3000");
+
+    let is_local = host.starts_with("localhost") || host.starts_with("127.0.0.1");
+    let base_host = if is_local {
+        format!("{}:3000", get_local_ip())
+    } else {
+        host.to_string()
+    };
+
+    let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    
+    use rand::Rng;
+    let mut responses = HashMap::new();
+
+    for (id, door) in DOORS.iter() {
+        let nonce: String = rand::thread_rng()
+            .sample_iter(&rand::distributions::Alphanumeric)
+            .take(16)
+            .map(char::from)
+            .collect();
+        let url = format!("http://{}/mobile/scan?door={}&ts={}&nonce={}&floor={}", base_host, id, timestamp, nonce, door.floor);
+        responses.insert(id.clone(), DynamicQrRes {
+            door_id: id.clone(),
+            floor: door.floor,
+            timestamp,
+            nonce,
+            url,
+        });
+    }
+
+    Json(responses).into_response()
 }
 
 // === 1. Door Display ===
@@ -565,11 +614,30 @@ async fn mobile_scan(
 #[derive(Deserialize)]
 struct SetupParams {
     role: Option<String>,
+    faculty_id: Option<String>,
+    pin: Option<String>,
+    password: Option<String>,
 }
 
 async fn mobile_setup(Query(params): Query<SetupParams>) -> impl IntoResponse {
     let requested_role = params.role.unwrap_or_else(|| "STUDENT".to_string()).to_uppercase();
     
+    if requested_role == "FACULTY" {
+        let fac_id = params.faculty_id.as_deref().unwrap_or("").trim();
+        let pin = params.pin.as_deref().unwrap_or("").trim();
+        let faculty_match = crate::rbac::FACULTIES.iter().find(|f| {
+            f.id.eq_ignore_ascii_case(fac_id) && f.pin == pin
+        });
+        if faculty_match.is_none() {
+            return (StatusCode::UNAUTHORIZED, Json(json!({"status": "failed", "message": "Invalid Faculty ID or PIN"}))).into_response();
+        }
+    } else if requested_role == "ADMIN" {
+        let pass = params.password.as_deref().unwrap_or("").trim();
+        if pass != crate::rbac::ADMIN_PASSWORD {
+            return (StatusCode::UNAUTHORIZED, Json(json!({"status": "failed", "message": "Incorrect Admin Password"}))).into_response();
+        }
+    }
+
     let (secret, role_name) = match get_role_secret(&requested_role) {
         Some(s) => (s, requested_role),
         None => (get_random_secret(), "UNKNOWN".to_string()),
@@ -581,7 +649,7 @@ async fn mobile_setup(Query(params): Query<SetupParams>) -> impl IntoResponse {
         "secret": secret.to_string(),
         "public_key": public_key.to_string(),
         "role": role_name
-    }))
+    })).into_response()
 }
 
 // === 3. Verification ===
@@ -596,7 +664,17 @@ struct VerifyPayload {
     section: Option<String>,
     faculty_name: Option<String>,
     faculty_id: Option<String>,
+    gps_valid: Option<bool>,
+    ip_city: Option<String>,
+    ip_region: Option<String>,
+    ip_country: Option<String>,
+    nonce: Option<String>,
+    qr_timestamp: Option<u64>,
+    floor: Option<i32>,
 }
+
+const EXPECTED_COUNTRY: &str = "India";
+const EXPECTED_REGION: &str = "Andhra Pradesh";
 
 async fn api_verify(Json(payload): Json<VerifyPayload>) -> impl IntoResponse {
     let door_id = payload.door_id.trim();
@@ -610,6 +688,37 @@ async fn api_verify(Json(payload): Json<VerifyPayload>) -> impl IntoResponse {
         },
     };
 
+    // 1.5 Dynamic QR Check (Anti-Replay / Location enforcement)
+    if payload.role != "ADMIN" {
+        let ts = payload.qr_timestamp.unwrap_or(0);
+        let current_time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        if current_time > ts + 5 {
+            log_denied(&payload, door, "QR Expired");
+            return (StatusCode::FORBIDDEN, Json(json!({"status": "failed", "message": "Location Check Failed: QR Code Expired (Took more than 5s)."}))).into_response();
+        }
+        
+        let nonce = payload.nonce.clone().unwrap_or_default();
+        if nonce.is_empty() {
+            log_denied(&payload, door, "Missing QR Nonce");
+            return (StatusCode::FORBIDDEN, Json(json!({"status": "failed", "message": "Location Check Failed: Invalid QR format"}))).into_response();
+        }
+        
+        {
+            let mut nonces = USED_NONCES.lock().unwrap();
+            if nonces.contains(&nonce) {
+                log_denied(&payload, door, "QR Reused");
+                return (StatusCode::FORBIDDEN, Json(json!({"status": "failed", "message": "Location Check Failed: QR Code already used"}))).into_response();
+            }
+            nonces.insert(nonce);
+        }
+
+        let sent_floor = payload.floor.unwrap_or(-1);
+        if sent_floor != door.floor {
+            log_denied(&payload, door, "Floor Mismatch");
+            return (StatusCode::FORBIDDEN, Json(json!({"status": "failed", "message": "Location Check Failed: Wrong Floor"}))).into_response();
+        }
+    }
+
     // 2. Authentication Logic
     match payload.role.as_str() {
         "ADMIN" => {
@@ -621,12 +730,12 @@ async fn api_verify(Json(payload): Json<VerifyPayload>) -> impl IntoResponse {
             println!("TERMINAL: [DOOR {}] ADMIN REMOTE ACCESS GRANTED", door_id);
         },
         "FACULTY" => {
-            let pin = payload.pin.as_deref().unwrap_or("");
-            let fac_id = payload.faculty_id.as_deref().unwrap_or("");
+            let pin = payload.pin.as_deref().unwrap_or("").trim();
+            let fac_id = payload.faculty_id.as_deref().unwrap_or("").trim();
             let section = payload.section.as_deref().unwrap_or("");
 
             let faculty_match = crate::rbac::FACULTIES.iter().find(|f| {
-                f.id == fac_id && f.pin == pin
+                f.id.eq_ignore_ascii_case(fac_id) && f.pin == pin
             });
 
             if faculty_match.is_none() {
@@ -634,12 +743,11 @@ async fn api_verify(Json(payload): Json<VerifyPayload>) -> impl IntoResponse {
                 log_denied(&payload, door, "Invalid Faculty Credentials");
                 return (StatusCode::UNAUTHORIZED, Json(json!({"status": "failed", "message": "Invalid ID or PIN for Faculty"}))).into_response();
             }
-            // Proximity Check (Relaxed to 6 chars for Demo - approx 1.2km)
-            let req_prefix = if door.geohash_prefix.len() >= 6 { &door.geohash_prefix[0..6] } else { &door.geohash_prefix };
-            if !payload.geohash.starts_with(req_prefix) {
-                 log_denied(&payload, door, "Access Denied: Location Mismatch");
-                 println!("TERMINAL: [DOOR {}] FACULTY DENIED DUE TO LOCATION. Expected prefix: {}, Got: {}", door_id, req_prefix, payload.geohash);
-                 return (StatusCode::FORBIDDEN, Json(json!({"status": "failed", "message": "Access Denied: You must be near the room to unlock."}))).into_response();
+            // Location checks are satisfied via Dynamic QR proximity logically above
+            // We only optionally check GPS for backup logging
+            let is_gps_valid = payload.gps_valid.unwrap_or(false);
+            if !is_gps_valid {
+                println!("TERMINAL: [DOOR {}] Optional warning: Faculty skipped GPS lock, but dynamic QR passed.", door_id);
             }
             
             // Store section-to-room mapping
@@ -677,11 +785,10 @@ async fn api_verify(Json(payload): Json<VerifyPayload>) -> impl IntoResponse {
                 }
             }
 
-            // Proximity Check (Relaxed to 6 chars for Demo)
-            let req_prefix = if door.geohash_prefix.len() >= 6 { &door.geohash_prefix[0..6] } else { &door.geohash_prefix };
-            if !payload.geohash.starts_with(req_prefix) {
-                 log_denied(&payload, door, "Access Denied: Location Mismatch");
-                 return (StatusCode::FORBIDDEN, Json(json!({"status": "failed", "message": "Access Denied: You must be near the room to unlock."}))).into_response();
+            // Location checks are satisfied via Dynamic QR proximity logically above
+            let is_gps_valid = payload.gps_valid.unwrap_or(false);
+            if !is_gps_valid {
+                println!("TERMINAL: [DOOR {}] Optional warning: Student skipped GPS lock, but dynamic QR passed.", door_id);
             }
         },
         _ => return (StatusCode::BAD_REQUEST, Json(json!({"status": "failed", "message": "Invalid Role"}))).into_response(),

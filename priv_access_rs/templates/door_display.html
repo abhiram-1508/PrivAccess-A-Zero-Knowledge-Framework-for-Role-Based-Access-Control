@@ -62,7 +62,7 @@
 
     <div class="bg-white p-8 rounded-2xl neon-border shadow-2xl">
         <div id="qrcode-container" class="flex flex-col items-center">
-            <img src="{{ qr_data_url }}" alt="Access QR Code" class="w-80 h-80">
+            <div id="qrcode"></div>
         </div>
         <div id="status" class="status text-center font-bold text-lg mt-4">● INITIALIZING</div>
     </div>
@@ -101,7 +101,36 @@
             };
         }
 
-        window.onload = initStatusListener;
+        let qrCodeObj = null;
+
+        async function updateQr() {
+            try {
+                const res = await fetch(`/api/dynamic_qr/${doorId}`);
+                const data = await res.json();
+                
+                // Clear existing QR
+                const qrContainer = document.getElementById("qrcode");
+                qrContainer.innerHTML = "";
+                
+                // Draw new QR
+                qrCodeObj = new QRCode(qrContainer, {
+                    text: data.url,
+                    width: 320,
+                    height: 320,
+                    colorDark : "#000000",
+                    colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.H
+                });
+            } catch (err) {
+                console.error("Failed to fetch dynamic QR", err);
+            }
+        }
+
+        window.onload = () => {
+            initStatusListener();
+            updateQr();
+            setInterval(updateQr, 2500); // refresh every 2.5 seconds
+        };
     </script>
 
 </body>
