@@ -184,9 +184,6 @@
                     <button onclick="showView('login-view')"
                         class="text-[10px] bg-gray-800 text-gray-400 px-3 py-1 rounded-full border border-gray-700 uppercase hover:bg-gray-700 transition-all">←
                         Fix Details</button>
-                    <button onclick="toggleQRDisplay()" id="qr-toggle-btn"
-                        class="text-[10px] bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full border border-blue-500/30 uppercase">Open
-                        Physical Scanner</button>
                 </div>
             </div>
 
@@ -213,12 +210,6 @@
                     class="text-[10px] text-blue-400 uppercase text-center tracking-[0.3em] font-bold">Room Access List
                 </p>
                 <div id="sim-qr-list" class="grid grid-cols-1 gap-4"></div>
-            </div>
-
-            <!-- Camera Reader (Secondary focus) -->
-            <div id="reader-container" class="hidden border-t border-gray-900 pt-6">
-                <p class="text-[10px] text-gray-500 uppercase text-center tracking-widest mb-4">Physical Scanner</p>
-                <div id="reader" class="glass overflow-hidden rounded-2xl"></div>
             </div>
         </section>
 

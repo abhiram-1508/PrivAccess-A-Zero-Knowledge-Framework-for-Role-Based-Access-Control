@@ -338,13 +338,6 @@ async fn api_room_qrs(
         .and_then(|h| h.to_str().ok())
         .unwrap_or("localhost:3000");
 
-    let final_host = if host.starts_with("localhost") || host.starts_with("127.0.0.1") {
-        let ip = get_local_ip();
-        format!("{}:3000", ip)
-    } else {
-        host.to_string()
-    };
-
     let mut room_qrs = Vec::new();
     let is_student = q_params.role.as_deref() == Some("STUDENT");
 
