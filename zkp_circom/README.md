@@ -32,3 +32,5 @@ snarkjs groth16 verify verification_key.json public.json proof.json
 
 - Edit `generate_proof.js` to set the correct geohash and prefix arrays.
 - Use the output `proof.json` and `public.json` in your backend for access control.
+
+
