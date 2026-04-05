@@ -44,13 +44,15 @@ PrivAccess/
 └── RUN.md                # Setup & execution guide
 🚀 Getting Started
 ✅ Prerequisites
-Python 3.8+
-pip package manager
-Rust (for backend server)
+- Rust (for backend server)
+- Node.js & npm (for ZKP dependencies)
+
 ⚙️ Installation
+```bash
 git clone <repository-url>
 cd PrivAccess-A-Zero-Knowledge-Framework-for-Role-Based-Access-Control
-pip install -r requirements.txt
+npm install
+```
 #### ▶️ Running the Application (Windows Recommended)
 Just run the automated script from the root:
 ```powershell
@@ -78,7 +80,7 @@ Use your mobile phone to scan
 Authentication completes automatically
 ✅ Zero interaction required on mobile
 🔧 Configuration
-👥 Roles (Defined in rbac/roles.py)
+👥 Roles
 ADMIN → Full access (read, write, delete)
 FACULTY → Read + Write access
 STUDENT → Read-only access
@@ -97,9 +99,8 @@ Public key must belong to an authorized role
 Each role uses distinct key derivation
 Prevents cross-role privilege misuse
 📊 System Highlights
-🌐 Web-based ZKP Prover (JavaScript)
-🐍 Backend Verification (Python)
-🦀 High-performance server (Rust)
+🌐 Web-based ZKP Prover (JavaScript/WASM)
+🦀 High-performance server & Verification (Rust)
 🔐 Strict role-based enforcement
 📞 Support & Contribution
 
