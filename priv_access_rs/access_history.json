@@ -214,6 +214,50 @@
     "status": "GRANTED",
     "faculty_name": null,
     "faculty_id": "Fac1"
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "B",
+    "timestamp": "2026-04-05 13:50:40",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "B",
+    "timestamp": "2026-04-05 13:50:43",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "B",
+    "timestamp": "2026-04-05 13:50:50",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "ADMIN",
+    "door_name": "Tiered 202",
+    "section": "N/A",
+    "timestamp": "2026-04-05 13:54:20",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "B",
+    "timestamp": "2026-04-05 13:55:25",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
   }
 ]
-

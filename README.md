@@ -51,14 +51,24 @@ Rust (for backend server)
 git clone <repository-url>
 cd PrivAccess-A-Zero-Knowledge-Framework-for-Role-Based-Access-Control
 pip install -r requirements.txt
-▶️ Running the Application
-🌐 Option 1: Web Interface (Recommended)
+#### ▶️ Running the Application (Windows Recommended)
+Just run the automated script from the root:
+```powershell
+.\run.ps1
+```
+This script will:
+1.  Check for port 3000 conflicts and resolve them automatically.
+2.  Verify your Rust and Node.js environment.
+3.  Start the Axum server.
 
-Simulates a mobile-based secure access system.
+---
 
-Step 1: Start Backend
-cd priv_access_rs
-cargo run
+#### 🌐 Manual Option: Web Interface
+1.  **Start Backend**:
+    ```bash
+    cd priv_access_rs
+    cargo run
+    ```
 Step 2: Open UI (Laptop/PC)
 Select role (Student / Faculty / Admin)
 Enter credentials
