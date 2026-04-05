@@ -142,7 +142,4 @@ cargo run
 
 ---
 
-## 📞 Support & Contribution
 
-For issues, suggestions, or contributions:
-👉 **Open an issue in the GitHub repository**
