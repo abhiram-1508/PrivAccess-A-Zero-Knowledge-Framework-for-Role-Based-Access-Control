@@ -143,22 +143,10 @@
                 </div>
             </div>
 
-            <!-- Admin Reference Data -->
-            <div class="grid grid-cols-2 gap-4">
+            <!-- Admin Reference Data (Simplified for Security) -->
+            <div class="grid grid-cols-1 gap-4">
                 <div class="glass p-4 rounded-2xl border border-blue-500/10">
-                    <h3 class="text-[10px] text-blue-400 uppercase font-bold mb-2 tracking-widest">Faculty Directory
-                    </h3>
-                    <div class="space-y-1 text-[9px]">
-                        {% for fac in faculties %}
-                        <div class="flex justify-between border-b border-gray-800/50 pb-1">
-                            <span class="text-gray-300">{{ fac.id }}</span>
-                            <span class="text-gray-500 font-mono">PIN: {{ fac.pin }}</span>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-                <div class="glass p-4 rounded-2xl border border-blue-500/10">
-                    <h3 class="text-[10px] text-blue-400 uppercase font-bold mb-2 tracking-widest">Sections</h3>
+                    <h3 class="text-[10px] text-blue-400 uppercase font-bold mb-2 tracking-widest">Available Sections</h3>
                     <div class="flex flex-wrap gap-1">
                         {% for sec in sections %}
                         <span
@@ -286,9 +274,9 @@
     <script src="/static/js/zkp.js"></script>
     <script>
         const ROLES = { STUDENT: 'STUDENT', FACULTY: 'FACULTY', ADMIN: 'ADMIN' };
-        let currentRole = new URLSearchParams(window.location.search).get('role') || 'STUDENT';
+        let currentRole = new URLSearchParams(window.location.search).get('role') || localStorage.getItem('priv_role') || 'STUDENT';
         let currentGeohash = "";
-        let identity = null;
+        let identity = JSON.parse(localStorage.getItem('priv_identity')) || null;
         let html5QrScanner = null;
         let watchId = null;
         let isSimulated = false;
@@ -302,6 +290,11 @@
 
         window.onload = () => {
             const params = new URLSearchParams(window.location.search);
+            const roleInUrl = params.get('role');
+            if (roleInUrl) {
+                currentRole = roleInUrl.toUpperCase();
+                localStorage.setItem('priv_role', currentRole);
+            }
             const doorIdFromUrl = params.get('door');
 
             document.getElementById('role-label').innerText = currentRole;
@@ -335,13 +328,33 @@
                 return;
             }
 
-            // 1. Extract identity from URL
-            identity = {
-                role: params.get('role').toUpperCase(),
-                section: params.get('section'),
-                faculty_id: params.get('faculty_id'),
-                pin: params.get('pin')
-            };
+            // 2. Extract identity: Prioritize URL parameters for True Zero-Touch
+            const urlRole = params.get('role');
+            const urlSection = params.get('section');
+            const urlFacId = params.get('faculty_id');
+            const urlPin = params.get('pin');
+            const urlPass = params.get('password');
+            
+            // ALWAYS Sync first to get UI state if any
+            syncIdentity();
+            
+            if (urlRole) identity.role = urlRole.toUpperCase();
+            if (urlSection) identity.section = urlSection.toUpperCase();
+            if (urlFacId) identity.faculty_id = urlFacId;
+            if (urlPin) identity.pin = urlPin;
+            if (urlPass) identity.password = urlPass;
+
+            // Persist this immediately so it's not lost
+            localStorage.setItem('priv_identity', JSON.stringify(identity));
+            localStorage.setItem('priv_role', identity.role);
+            
+            // Update UI immediately to reflect detected role
+            document.getElementById('role-label').innerText = identity.role;
+            if (identity.role === 'FACULTY') {
+                document.getElementById('login-title').innerText = "FACULTY AUTH";
+            } else if (identity.role === 'ADMIN') {
+                document.getElementById('login-title').innerText = "ADMIN LOGIN";
+            }
 
             // 2. Clear UI, show process
             showProc(true, "Verifying Scan...");
@@ -360,14 +373,19 @@
                 }
                 const res = await axios.get(setupUrl);
                 identity.secret = res.data.secret;
+                localStorage.setItem('priv_identity', JSON.stringify(identity));
 
                 // 5. Short wait for location then trigger logic
                 let attempts = 0;
+                const ts = params.get('ts');
+                const nonce = params.get('nonce');
+                const floor = params.get('floor');
+                
                 const checkLoc = setInterval(() => {
                     attempts++;
                     if (currentGeohash || attempts > 10) {
                         clearInterval(checkLoc);
-                        triggerUnlock(doorId);
+                        triggerUnlock(doorId, ts, nonce, floor);
                     }
                 }, 500);
             } catch (e) {
@@ -392,6 +410,8 @@
                 document.getElementById('login-title').innerText = "STUDENT ACCESS";
                 document.getElementById('login-desc').innerText = "Select your section and ensure GPS is active.";
             }
+            // Update global currentRole based on what we just showed
+            currentRole = document.getElementById('login-title').innerText.includes("FACULTY") ? "FACULTY" : (document.getElementById('login-title').innerText.includes("ADMIN") ? "ADMIN" : "STUDENT");
         }
 
         function initAutoLocation() {
@@ -515,6 +535,8 @@
                 section: section,
                 faculty_id: facId
             };
+            localStorage.setItem('priv_identity', JSON.stringify(identity));
+            localStorage.setItem('priv_role', identity.role);
 
             showProc(true, "Synchronizing Identity...");
             // Ensure location is initialized as soon as identity is binding
@@ -529,10 +551,14 @@
 
             axios.get(setupUrl).then(res => {
                 identity.secret = res.data.secret;
+                localStorage.setItem('priv_identity', JSON.stringify(identity));
                 showProc(false);
                 if (currentRole === ROLES.ADMIN) {
                     showView('admin-view');
                     loadRoomQRs('admin-qr-list', true);
+                } else if (currentRole === ROLES.FACULTY) {
+                    showView('admin-view');
+                    loadRoomQRs('admin-qr-list', false, identity); // Faculty view
                 } else if (currentRole === ROLES.STUDENT) {
                     showView('scanner-view');
                     document.getElementById('student-status-section').classList.remove('hidden');
@@ -563,16 +589,90 @@
             };
         }
 
+        function syncIdentity() {
+            // 1. Get current state from storage/memory
+            let existing = JSON.parse(localStorage.getItem('priv_identity')) || {};
+            let storedRole = localStorage.getItem('priv_role');
+            
+            // 2. Decide role: Memory > Storage > URL > UI Scraper
+            let activeRole = (identity && identity.role) ? identity.role : (storedRole || existing.role);
+            
+            if (!activeRole) {
+                const loginTitle = document.getElementById('login-title')?.innerText || "";
+                activeRole = loginTitle.includes("FACULTY") ? "FACULTY" : (loginTitle.includes("ADMIN") ? "ADMIN" : "STUDENT");
+            }
+            
+            const uiSection = document.getElementById('user-section')?.value;
+            const uiFacId = document.getElementById('faculty-id')?.value;
+            const uiPin = document.getElementById('faculty-pin')?.value;
+            const uiPass = document.getElementById('admin-pass')?.value;
+
+            // 3. Reconstruct Identity
+            identity = {
+                role: activeRole,
+                section: uiSection || existing.section || "",
+                faculty_id: uiFacId || existing.faculty_id || "",
+                pin: uiPin || existing.pin || "",
+                password: uiPass || existing.password || "",
+                secret: existing.secret || (identity ? identity.secret : null)
+            };
+
+            // 4. Save back to persistence
+            localStorage.setItem('priv_identity', JSON.stringify(identity));
+            localStorage.setItem('priv_role', identity.role);
+            return identity;
+        }
+
         async function triggerUnlock(doorId, ts, nonce, floor) {
-            // LOCATION CHECK: Check if we have at least one valid location indicator before attempting verification
-            if (currentRole !== ROLES.ADMIN) {
-                if (!currentGeohash && !ipCountry) {
-                    showError("Access Denied: Location must be verified (Enable GPS or ensure network connectivity).");
+            // ALWAYS Sync first
+            syncIdentity();
+            
+            // VALIDATION: Detailed check
+            if (identity.role === 'STUDENT' || identity.role === 'FACULTY') {
+                if (!identity.section || identity.section === "" || identity.section.length > 2) {
+                    showError("Please ensure you have selected a valid Section (A-H) before unlocking.");
+                    return;
+                }
+            }
+            
+            // Ensure we have a secret if we are missing one
+            if (identity.role !== 'STUDENT' && !identity.secret) {
+                showProc(true, "Authenticating Credentials...");
+                try {
+                    let setupUrl = `/mobile/setup?role=${identity.role}`;
+                    if (identity.role === 'FACULTY') {
+                        setupUrl += `&faculty_id=${encodeURIComponent(identity.faculty_id || '')}&pin=${encodeURIComponent(identity.pin || '')}`;
+                    } else if (identity.role === 'ADMIN') {
+                        setupUrl += `&password=${encodeURIComponent(identity.password || '')}`;
+                    }
+                    const sRes = await axios.get(setupUrl);
+                    identity.secret = sRes.data.secret;
+                } catch (e) {
+                    showProc(false);
+                    showError("Identity Setup Failed: " + (e.response?.data?.message || e.message));
                     return;
                 }
             }
 
-            if (currentRole !== ROLES.ADMIN) {
+            // LOCATION CHECK
+            if (identity.role !== 'ADMIN') {
+                if (!identity.secret) {
+                    showProc(true, "Refreshing Secure Identity...");
+                    try {
+                        let setupUrl = `/mobile/setup?role=${identity.role}`;
+                        if (identity.role === 'FACULTY') {
+                            setupUrl += `&faculty_id=${encodeURIComponent(identity.faculty_id || '')}&pin=${encodeURIComponent(identity.pin || '')}`;
+                        }
+                        const sRes = await axios.get(setupUrl);
+                        identity.secret = sRes.data.secret;
+                        localStorage.setItem('priv_identity', JSON.stringify(identity));
+                    } catch (e) {
+                        showProc(false);
+                        showError("Failed to auto-recover identity: " + e.message);
+                        return;
+                    }
+                }
+
                 showProc(true, "GENERATING ZK-LOCATION PROOF...");
                 try {
                     const prover = new SchnorrProverJS(identity.secret);
@@ -592,8 +692,8 @@
                         ip_region: ipRegion,
                         ip_country: ipCountry,
                         nonce: nonce,
-                        qr_timestamp: ts,
-                        floor: floor
+                        qr_timestamp: ts ? parseInt(ts) : null,
+                        floor: floor ? parseInt(floor) : null
                     };
 
                     const res = await axios.post('/api/verify', payload);
@@ -695,6 +795,24 @@
             });
         }
 
+        async function simulateDynamicQR(doorId) {
+            // Simulated scan: grab the latest dynamic URL for this door from server
+            showProc(true, `Simulating scan for ${doorId}...`);
+            try {
+                const res = await axios.get(`/api/dynamic_qr/${doorId}`);
+                const url = new URL(res.data.url);
+                const ts = url.searchParams.get('ts');
+                const nonce = url.searchParams.get('nonce');
+                const floor = url.searchParams.get('floor');
+                
+                showProc(false);
+                showTapToUnlock(doorId, ts, nonce, floor);
+            } catch (e) {
+                showProc(false);
+                showError("Simulation Failed: Unable to fetch dynamic token for this room.");
+            }
+        }
+
         function loadRoomQRs(targetId, isAdminOverride, ident) {
             if (dynamicQrInterval) clearInterval(dynamicQrInterval);
             qrInstances = {};
@@ -730,7 +848,7 @@
                 if (!isAdminOverride) {
                     // Start fetching dynamic payloads for all shown doors
                     fetchDynamicQrs();
-                    dynamicQrInterval = setInterval(fetchDynamicQrs, 2500);
+                    dynamicQrInterval = setInterval(fetchDynamicQrs, 6000);
                 }
             }).catch(err => {
                 console.error("Failed to load QR layouts:", err);
@@ -739,7 +857,12 @@
 
         async function fetchDynamicQrs() {
             try {
-                const res = await axios.get('/api/dynamic_qrs_all');
+                let url = '/api/dynamic_qrs_all?_t=' + Date.now();
+                if (identity && identity.role) url += `&role=${identity.role}`;
+                if (identity && identity.section) url += `&section=${identity.section}`;
+                if (identity && identity.faculty_id) url += `&faculty_id=${encodeURIComponent(identity.faculty_id)}`;
+                if (identity && identity.pin) url += `&pin=${encodeURIComponent(identity.pin)}`;
+                const res = await axios.get(url);
                 for (const [id, data] of Object.entries(res.data)) {
                     const qrBox = document.getElementById(`qr-${id}`);
                     if (qrBox) {

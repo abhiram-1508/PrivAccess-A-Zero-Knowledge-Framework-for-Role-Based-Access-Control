@@ -124,6 +124,9 @@ async function sha256(message) {
 
 class SchnorrProverJS {
     constructor(privateKeyStr) {
+        if (privateKeyStr === null || privateKeyStr === undefined) {
+            throw new Error("SchnorrProverJS: Missing Required Private Key (Secret)");
+        }
         this.privateKey = BigInt(privateKeyStr);
         this.publicKey = powerMod(G, this.privateKey, P);
     }

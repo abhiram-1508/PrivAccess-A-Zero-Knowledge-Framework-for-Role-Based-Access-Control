@@ -68,23 +68,7 @@ static SECTION_ROOM_MAP: Lazy<std::sync::Mutex<HashMap<String, (String, String)>
 
 
 async fn verify_zkp(Json(payload): Json<ZkProofPayload>) -> impl IntoResponse {
-    // === DEMO MODE BYPASS ===
-    // If ZKP artifacts are missing, we still want the demo to show the "Privacy-Preserving Geofence" logic.
-    if let Some(true) = payload.demo {
-        println!("DEBUG: Verifying in DEMO MODE (Simulation)...");
-        let user_hash = payload.user_hash.unwrap_or_default();
-        let allowed_prefix = payload.allowed_prefix.unwrap_or_default();
-        
-        // Ensure at least 6 characters match (same as the ZK circuit)
-        if user_hash.starts_with(&allowed_prefix) && allowed_prefix.len() >= 6 {
-            println!("SUCCESS: Geofence check PASSED in Demo Mode.");
-            return (StatusCode::OK, "Access granted (Demo Mode)").into_response();
-        } else {
-            return (StatusCode::FORBIDDEN, "Access denied: User is outside the geofence").into_response();
-        }
-    }
-
-    // === REAL ZKP VERIFICATION ===
+    // === REAL ZKP VERIFICATION (No Bypass) ===
     let proof = match payload.proof {
         Some(p) => p,
         None => return (StatusCode::BAD_REQUEST, "Missing proof").into_response(),
@@ -333,7 +317,7 @@ async fn api_room_qrs(
     Query(q_params): Query<QrParams>,
     req: axum::http::Request<axum::body::Body>,
 ) -> impl IntoResponse {
-    let host = req.headers()
+    let _host = req.headers()
         .get("host")
         .and_then(|h| h.to_str().ok())
         .unwrap_or("localhost:3000");
@@ -380,7 +364,14 @@ fn get_local_ip() -> String {
     ip
 }
 
-// === Dynamic QR Code API ===
+#[derive(Deserialize)]
+struct DynamicQrParams {
+    role: Option<String>,
+    section: Option<String>,
+    faculty_id: Option<String>,
+    pin: Option<String>,
+}
+
 #[derive(Serialize)]
 struct DynamicQrRes {
     door_id: String,
@@ -392,6 +383,7 @@ struct DynamicQrRes {
 
 async fn api_dynamic_qr(
     axum::extract::Path(door_id): axum::extract::Path<String>,
+    Query(params): Query<DynamicQrParams>,
     req: axum::http::Request<axum::body::Body>,
 ) -> impl IntoResponse {
     let door = match DOORS.get(&door_id) {
@@ -420,19 +412,38 @@ async fn api_dynamic_qr(
         .map(char::from)
         .collect();
 
-    // URL scheme: http://HOST/s/door_id?ts=XXX&nonce=YYY&floor=Z
-    let url = format!("http://{}/s/{}?ts={}&nonce={}&floor={}", base_host, door_id, timestamp, nonce, door.floor);
+    // Use /s/ short redirect for QR efficiency, adding role and section if provided
+    let mut final_url = format!("http://{}/s/{}?ts={}&nonce={}&floor={}", 
+                               base_host, door_id, timestamp, nonce, door.floor);
+    
+    if let Some(r) = params.role {
+        final_url.push_str(&format!("&role={}", r));
+    }
+    if let Some(s) = params.section {
+        final_url.push_str(&format!("&section={}", s));
+    }
+    if let Some(fid) = params.faculty_id {
+        final_url.push_str(&format!("&faculty_id={}", encode_url(&fid)));
+    }
+    if let Some(p) = params.pin {
+        final_url.push_str(&format!("&pin={}", encode_url(&p)));
+    }
 
     Json(DynamicQrRes {
         door_id,
         floor: door.floor,
         timestamp,
         nonce,
-        url,
+        url: final_url,
     }).into_response()
 }
 
+fn encode_url(s: &str) -> String {
+    urlencoding::encode(s).to_string()
+}
+
 async fn api_dynamic_qrs_all(
+    Query(params): Query<DynamicQrParams>,
     req: axum::http::Request<axum::body::Body>,
 ) -> impl IntoResponse {
     let host = req.headers()
@@ -458,7 +469,21 @@ async fn api_dynamic_qrs_all(
             .take(16)
             .map(char::from)
             .collect();
-        let url = format!("http://{}/mobile/scan?door={}&ts={}&nonce={}&floor={}", base_host, id, timestamp, nonce, door.floor);
+            
+        let mut url = format!("http://{}/s/{}?ts={}&nonce={}&floor={}", base_host, id, timestamp, nonce, door.floor);
+        if let Some(r) = &params.role {
+            url.push_str(&format!("&role={}", r));
+        }
+        if let Some(s) = &params.section {
+            url.push_str(&format!("&section={}", s));
+        }
+        if let Some(fid) = &params.faculty_id {
+            url.push_str(&format!("&faculty_id={}", encode_url(fid)));
+        }
+        if let Some(p) = &params.pin {
+            url.push_str(&format!("&pin={}", encode_url(p)));
+        }
+
         responses.insert(id.clone(), DynamicQrRes {
             door_id: id.clone(),
             floor: door.floor,
@@ -561,12 +586,34 @@ async fn door_status_stream(
 }
 
 // === 2. Mobile App ===
+#[derive(Deserialize)]
+struct ShortScanParams {
+    ts: Option<u64>,
+    nonce: Option<String>,
+    floor: Option<i32>,
+    role: Option<String>,
+    section: Option<String>,
+    faculty_id: Option<String>,
+    pin: Option<String>,
+}
+
 async fn short_scan(
-    axum::extract::Path(door_id): axum::extract::Path<String>
+    axum::extract::Path(door_id): axum::extract::Path<String>,
+    Query(params): Query<ShortScanParams>,
 ) -> Redirect {
     println!("TERMINAL: [DOOR {}] QR Scanned! Mobile connecting...", door_id);
     let _ = DOOR_STATUS_TX.send((door_id.clone(), "connected".to_string()));
-    Redirect::to(&format!("/mobile/scan?door={}", door_id))
+    
+    let mut url = format!("/mobile/scan?door={}", door_id);
+    if let Some(ts) = params.ts { url.push_str(&format!("&ts={}", ts)); }
+    if let Some(nonce) = params.nonce { url.push_str(&format!("&nonce={}", nonce)); }
+    if let Some(floor) = params.floor { url.push_str(&format!("&floor={}", floor)); }
+    if let Some(role) = params.role { url.push_str(&format!("&role={}", role)); }
+    if let Some(section) = params.section { url.push_str(&format!("&section={}", section)); }
+    if let Some(fid) = params.faculty_id { url.push_str(&format!("&faculty_id={}", encode_url(&fid))); }
+    if let Some(p) = params.pin { url.push_str(&format!("&pin={}", encode_url(&p))); }
+    
+    Redirect::to(&url)
 }
 
 #[derive(Deserialize)]
@@ -595,7 +642,6 @@ async fn mobile_scan(
         context.insert("door_id", &d);
     }
 
-    context.insert("faculties", crate::rbac::FACULTIES);
     context.insert("sections", crate::rbac::SECTIONS);
 
     match state.tera.render("mobile_app.html", &context) {
@@ -685,9 +731,9 @@ async fn api_verify(Json(payload): Json<VerifyPayload>) -> impl IntoResponse {
     if payload.role != "ADMIN" {
         let ts = payload.qr_timestamp.unwrap_or(0);
         let current_time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-        if current_time > ts + 5 {
+        if current_time > ts + 15 {
             log_denied(&payload, door, "QR Expired");
-            return (StatusCode::FORBIDDEN, Json(json!({"status": "failed", "message": "Location Check Failed: QR Code Expired (Took more than 5s)."}))).into_response();
+            return (StatusCode::FORBIDDEN, Json(json!({"status": "failed", "message": "Location Check Failed: QR Code Expired (Took more than 15s)."}))).into_response();
         }
         
         let nonce = payload.nonce.clone().unwrap_or_default();
@@ -752,9 +798,10 @@ async fn api_verify(Json(payload): Json<VerifyPayload>) -> impl IntoResponse {
             }
         },
         "STUDENT" => {
-            let section = payload.section.as_deref().unwrap_or("");
-            if !crate::rbac::SECTIONS.contains(&section) {
-                log_denied(&payload, door, "Invalid Section");
+            let section = payload.section.as_deref().unwrap_or("").trim();
+            if section.is_empty() || !crate::rbac::SECTIONS.iter().any(|s| s.eq_ignore_ascii_case(section)) {
+                println!("TERMINAL: [DOOR {}] REJECTED: Invalid Section '{}' for Student", door_id, section);
+                log_denied(&payload, door, &format!("Invalid Section: {}", section));
                 return (StatusCode::BAD_REQUEST, Json(json!({"status": "failed", "message": "Invalid Section Selected"}))).into_response();
             }
 
