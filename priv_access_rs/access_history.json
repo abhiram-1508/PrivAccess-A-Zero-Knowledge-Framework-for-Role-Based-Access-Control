@@ -259,5 +259,212 @@
     "status": "DENIED: No room allotted",
     "faculty_name": null,
     "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "B",
+    "timestamp": "2026-04-06 14:40:23",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "FACULTY",
+    "door_name": "Lab 103",
+    "section": "A",
+    "timestamp": "2026-04-06 14:41:23",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": "Fac4"
+  },
+  {
+    "role": "FACULTY",
+    "door_name": "Lab 103",
+    "section": "E",
+    "timestamp": "2026-04-06 14:43:30",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": "Fac1"
+  },
+  {
+    "role": "FACULTY",
+    "door_name": "Room 101",
+    "section": "A",
+    "timestamp": "2026-04-06 14:47:20",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": "Fac2"
+  },
+  {
+    "role": "FACULTY",
+    "door_name": "Room 101",
+    "section": "A",
+    "timestamp": "2026-04-06 14:47:53",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": "Fac2"
+  },
+  {
+    "role": "FACULTY",
+    "door_name": "Lab 103",
+    "section": "H",
+    "timestamp": "2026-04-06 15:00:22",
+    "status": "DENIED: GPS & IP Verification Failed",
+    "faculty_name": null,
+    "faculty_id": "Fac4"
+  },
+  {
+    "role": "FACULTY",
+    "door_name": "Room 101",
+    "section": "A",
+    "timestamp": "2026-04-06 15:07:41",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": "Fac4"
+  },
+  {
+    "role": "FACULTY",
+    "door_name": "Tiered 202",
+    "section": "A",
+    "timestamp": "2026-04-06 15:07:57",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": "Fac4"
+  },
+  {
+    "role": "FACULTY",
+    "door_name": "Room 101",
+    "section": "A",
+    "timestamp": "2026-04-06 19:08:41",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": "Fac1"
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "A",
+    "timestamp": "2026-04-06 19:21:11",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room 101",
+    "section": "A",
+    "timestamp": "2026-04-06 19:21:27",
+    "status": "DENIED: QR Expired",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room 101",
+    "section": "A",
+    "timestamp": "2026-04-06 19:23:17",
+    "status": "DENIED: QR Expired",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room 101",
+    "section": "A",
+    "timestamp": "2026-04-06 19:23:19",
+    "status": "DENIED: QR Expired",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room 101",
+    "section": "A",
+    "timestamp": "2026-04-06 19:23:21",
+    "status": "DENIED: QR Expired",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room 101",
+    "section": "A",
+    "timestamp": "2026-04-06 19:23:40",
+    "status": "DENIED: QR Expired",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room 101",
+    "section": "A",
+    "timestamp": "2026-04-06 19:23:42",
+    "status": "DENIED: QR Expired",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room 101",
+    "section": "A",
+    "timestamp": "2026-04-06 19:23:44",
+    "status": "DENIED: QR Expired",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "B",
+    "timestamp": "2026-04-06 19:25:44",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "FACULTY",
+    "door_name": "Lab 103",
+    "section": "A",
+    "timestamp": "2026-04-06 19:26:04",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": "Fac1"
+  },
+  {
+    "role": "ADMIN",
+    "door_name": "Lab 303",
+    "section": "N/A",
+    "timestamp": "2026-04-06 19:33:26",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "STUDENT",
+    "door_name": "Room lookup",
+    "section": "B",
+    "timestamp": "2026-04-06 20:37:51",
+    "status": "DENIED: No room allotted",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "ADMIN",
+    "door_name": "Tiered 202",
+    "section": "N/A",
+    "timestamp": "2026-04-06 20:38:09",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": null
+  },
+  {
+    "role": "FACULTY",
+    "door_name": "Tiered 202",
+    "section": "A",
+    "timestamp": "2026-04-06 20:46:00",
+    "status": "GRANTED",
+    "faculty_name": null,
+    "faculty_id": "Fac1"
   }
 ]
